@@ -8,7 +8,7 @@
         android:label="Salto Estelar" android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher" android:allowBackup="true" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:configChanges="orientation|screenSize|keyboardHidden"
-            android:screenOrientation="unspecified" android:exported="true">
+            android:screenOrientation="landscape" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

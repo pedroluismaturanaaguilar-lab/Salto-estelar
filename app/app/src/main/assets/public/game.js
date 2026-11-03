@@ -1141,7 +1141,9 @@
     bindHold(document.getElementById('btnJump'), jumpDown, jumpUp);
     document.getElementById('btnShoot')?.addEventListener('pointerdown',e=>{e.preventDefault();fireShot();});
 
-    document.getElementById('btnStart').addEventListener('click', () => { Sound.unlock(); startGame(); });
+    function requestLandscapeMode(){if(!window.matchMedia('(pointer: coarse)').matches)return;const lock=()=>{try{screen.orientation?.lock?.('landscape')?.catch(()=>{});}catch(e){}};if(!document.fullscreenElement&&document.documentElement.requestFullscreen){document.documentElement.requestFullscreen().then(lock).catch(()=>{});}else lock();}
+    document.getElementById('btnRotateLandscape')?.addEventListener('click',requestLandscapeMode);
+    document.getElementById('btnStart').addEventListener('click', () => { requestLandscapeMode(); Sound.unlock(); startGame(); });
     document.getElementById('btnRetry').addEventListener('click', startGame);
     document.getElementById('btnPlayAgain').addEventListener('click', startGame);
     document.getElementById('btnRestartPause').addEventListener('click', startGame);

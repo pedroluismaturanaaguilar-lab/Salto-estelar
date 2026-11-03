@@ -2,7 +2,7 @@
   'use strict';
   const $=id=>document.getElementById(id), TOKEN_KEY='saltoEstelar.token', LOCAL_KEY='saltoEstelar.localProfile';
   const state={token:localStorage.getItem(TOKEN_KEY)||'',user:null,profile:null,socket:null,active:false,host:false,room:'',remotePlayer:null,peer:null,stream:null,remoteStream:null,targets:{score:0,other:0,running:false,seconds:30}};
-  let catalog={},syncTimer=null,targetTimer=null,targetMove=null,pendingRoomAction='',lastMatchScore=0;
+  let catalog={},syncTimer=null,targetTimer=null,targetMove=null,pendingRoomAction='',lastMatchScore=0,databaseMode='unknown';
   const api=async(path,body,method='POST')=>{const r=await fetch('/api'+path,{method,headers:{'content-type':'application/json',...(state.token?{authorization:'Bearer '+state.token}:{})},...(body?{body:JSON.stringify(body)}:{})});const d=await r.json();if(!r.ok)throw new Error(d.error||'No se pudo conectar con el servidor.');return d;};
   function localProfile(){try{return JSON.parse(localStorage.getItem(LOCAL_KEY))||{coins:0,level:1,score:0,completedLevels:[],inventory:{owned:['avatar_blue']}};}catch{return {coins:0,level:1,score:0,completedLevels:[],inventory:{owned:['avatar_blue']}};}}
   function saveLocal(p){localStorage.setItem(LOCAL_KEY,JSON.stringify(p));}
@@ -12,7 +12,7 @@
   async function refreshProfile(){if(!state.token)return;try{const d=await api('/me',null,'GET');state.user=d.user;state.profile=d.user.profile;renderProfile();renderShop();}catch(e){state.token='';state.user=null;state.profile=null;localStorage.removeItem(TOKEN_KEY);setMessage('accountStatus',e.message);}}
   function renderProfile(){
     const p=state.profile;if(!p)return;
-    setMessage('accountStatus','Conectado como '+state.user.username+'. Este perfil queda asociado a tu cuenta.');
+    setMessage('accountStatus',databaseMode==='local-json'&&location.hostname.endsWith('.onrender.com')?'Conectado como '+state.user.username+'. AVISO: Render aún usa almacenamiento temporal; conecta PostgreSQL para conservar el progreso tras reinicios.':'Conectado como '+state.user.username+'. Este perfil queda asociado a tu cuenta.');
     $('authForms').hidden=true;$('profileDetails').hidden=false;$('btnLogout').hidden=false;
     $('profileDetails').innerHTML=[['Monedas',p.coins],['Nivel actual',p.level],['Niveles completados',p.completedLevels.length],['Puntuación',p.score],['Distancia',Math.round(p.distance||0)],['Logros',p.achievements.length],['Vidas extra',p.inventory?.lives||0],['Inventario',(p.inventory?.owned||[]).length],['Partidas',p.history.length]].map(([k,v])=>`<div><b>${k}</b><br>${v}</div>`).join('');
     const achievementList=$('achievementList');achievementList.hidden=!(p.achievements||[]).length;achievementList.replaceChildren();for(const achievement of (p.achievements||[])){const row=document.createElement('div');row.textContent='🏆 '+({ 'levels-1':'Primer nivel','levels-10':'Diez niveles','levels-50':'Cincuenta niveles','levels-100':'Leyenda: cien niveles' }[achievement]||achievement);achievementList.appendChild(row);}
@@ -62,7 +62,7 @@
   async function call(kind){if(!tokenNeeded()||!state.active)return setMessage('onlineStatus','Crea o únete a una sala antes de iniciar la llamada.');try{if(state.stream){state.stream.getTracks().forEach(t=>t.stop());state.stream=null;closeCall();return;}state.stream=await navigator.mediaDevices.getUserMedia({audio:true,video:kind==='video'});$('localVideo').srcObject=state.stream;$('callVideos').hidden=false;if(state.peer)state.stream.getTracks().forEach(t=>state.peer.addTrack(t,state.stream));await ensureOffer();setMessage('onlineStatus',kind==='video'?'Videollamada conectándose…':'Llamada de voz conectándose…');}catch(e){setMessage('onlineStatus','No se pudo acceder al micrófono o cámara: '+e.message);}}
   function closeCall(){if(state.peer){state.peer.close();state.peer=null;}if(state.stream){state.stream.getTracks().forEach(t=>t.stop());state.stream=null;}state.remoteStream=null;$('callVideos').hidden=true;}
 
-  async function loadCatalog(){try{catalog=(await api('/catalog',null,'GET')).items;renderShop();}catch(e){console.warn(e.message);}}
+  async function loadCatalog(){try{catalog=(await api('/catalog',null,'GET')).items;const health=await api('/health',null,'GET');databaseMode=health.database||'unknown';if(databaseMode==='local-json'&&location.hostname.endsWith('.onrender.com')){setMessage('onlineStatus','AVISO: PostgreSQL aún no está conectado en Render. Las cuentas se guardan temporalmente hasta configurarlo.');if(state.profile)renderProfile();}renderShop();}catch(e){console.warn(e.message);}}
   function renderShop(){
     const items=$('shopItems');if(!items)return;const p=state.profile||localProfile();
     setMessage('shopBalance','Saldo: '+(p.coins||0)+' monedas · Las compras de cuenta se guardan en el servidor.');items.innerHTML='';
