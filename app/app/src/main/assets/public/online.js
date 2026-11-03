@@ -1,8 +1,8 @@
 (() => {
   'use strict';
   const $=id=>document.getElementById(id), TOKEN_KEY='saltoEstelar.token', LOCAL_KEY='saltoEstelar.localProfile';
-  const state={token:localStorage.getItem(TOKEN_KEY)||'',user:null,profile:null,socket:null,active:false,host:false,room:'',remotePlayer:null,peer:null,stream:null,remoteStream:null,targets:{score:0,other:0,running:false,seconds:30}};
-  let catalog={},syncTimer=null,targetTimer=null,targetMove=null,pendingRoomAction='',lastMatchScore=0,databaseMode='unknown';
+  const state={token:localStorage.getItem(TOKEN_KEY)||'',user:null,profile:null,socket:null,active:false,host:false,room:'',remotePlayer:null,peer:null,stream:null,remoteStream:null};
+  let catalog={},syncTimer=null,pendingRoomAction='',lastMatchScore=0,databaseMode='unknown';
   const api=async(path,body,method='POST')=>{const r=await fetch('/api'+path,{method,headers:{'content-type':'application/json',...(state.token?{authorization:'Bearer '+state.token}:{})},...(body?{body:JSON.stringify(body)}:{})});const d=await r.json();if(!r.ok)throw new Error(d.error||'No se pudo conectar con el servidor.');return d;};
   function localProfile(){try{return JSON.parse(localStorage.getItem(LOCAL_KEY))||{coins:0,level:1,score:0,completedLevels:[],inventory:{owned:['avatar_blue']}};}catch{return {coins:0,level:1,score:0,completedLevels:[],inventory:{owned:['avatar_blue']}};}}
   function saveLocal(p){localStorage.setItem(LOCAL_KEY,JSON.stringify(p));}
@@ -40,7 +40,6 @@
     if(m.type==='level'){window.SaltoGame?.applyLevel(m.level);return;}
     if(m.type==='signal')handleSignal(m);
     if(m.type==='chat')addChat(m.username,m.text);
-    if(m.type==='target-score'){state.targets.other=m.score||0;setMessage('targetScore',`Tú: ${state.targets.score} · compañero: ${state.targets.other} · munición: ${window.SaltoGame?.getState().bullets||0}`);}
     if(m.type==='error')setMessage('onlineStatus',m.error);
   }
   function ensureStarted(){if(window.SaltoGame?.getState().level===0)window.SaltoGame.start();}
@@ -76,13 +75,7 @@
     }
   }
 
-  function targetRules(){const mode=$('targetDifficulty').value;return mode==='easy'?{seconds:40,threshold:5,team:8,move:1000,size:'2.5rem'}:mode==='hard'?{seconds:25,threshold:10,team:16,move:380,size:'1.7rem'}:{seconds:30,threshold:7,team:12,move:650,size:'2.1rem'};}
-  function startTargets(){if(state.targets.running)return;state.targets.running=true;state.targets.score=0;const rules=targetRules();state.targets.seconds=rules.seconds;$('targetArena').querySelector('.moving-target').style.fontSize=rules.size;const update=()=>setMessage('targetScore',`Tú: ${state.targets.score} · compañero: ${state.targets.other} · ${state.targets.seconds}s · balas: ${window.SaltoGame?.getState().bullets||0}`);update();clearInterval(targetTimer);targetTimer=setInterval(()=>{state.targets.seconds--;if(state.targets.seconds<=0){clearInterval(targetTimer);state.targets.running=false;clearTimeout(targetMove);setMessage('targetScore',`Fin · Tú: ${state.targets.score} · compañero: ${state.targets.other}`);if(state.targets.score>=rules.threshold)reward(5,'targets:'+Date.now());else if(state.targets.score+state.targets.other>=rules.team)reward(8,'targets-team:'+Date.now());return;}update();},1000);moveTarget();}
-  function moveTarget(){const target=$('targetArena').querySelector('.moving-target');if(!state.targets.running)return;target.style.left=(5+Math.random()*85)+'%';target.style.top=(5+Math.random()*70)+'%';targetMove=setTimeout(moveTarget,targetRules().move);}
-  $('targetArena').addEventListener('click',e=>{if(!e.target.closest('.moving-target')||!state.targets.running)return;const g=window.SaltoGame?.getState();if(!g||g.bullets<=0){setMessage('targetScore','Necesitas balas. Encuentra una fruta o un cofre.');return;}window.SaltoGame.shoot();state.targets.score++;send({type:'target-score',score:state.targets.score});setMessage('targetScore',`Tú: ${state.targets.score} · compañero: ${state.targets.other} · ${state.targets.seconds}s`);});
-  $('btnTargetStart').addEventListener('click',startTargets);
-
-  $('btnAccount').addEventListener('click',()=>{show('screen-account');if(state.profile)renderProfile();});$('btnShop').addEventListener('click',()=>{show('screen-shop');renderShop();});$('btnOnline').addEventListener('click',()=>show('screen-online'));$('btnTargets').addEventListener('click',()=>show('screen-targets'));
+  $('btnAccount').addEventListener('click',()=>{show('screen-account');if(state.profile)renderProfile();});$('btnShop').addEventListener('click',()=>{show('screen-shop');renderShop();});$('btnOnline').addEventListener('click',()=>show('screen-online'));
   $('btnLogin').addEventListener('click',()=>authenticate('login'));$('btnRegister').addEventListener('click',()=>authenticate('register'));$('btnLogout').addEventListener('click',()=>{state.socket?.close();closeCall();state.token='';state.user=null;state.profile=null;state.active=false;localStorage.removeItem(TOKEN_KEY);$('authForms').hidden=false;$('profileDetails').hidden=true;$('avatarPicker').hidden=true;$('btnLogout').hidden=true;setMessage('accountStatus','Sesión cerrada.');});
   $('btnCreateRoom').addEventListener('click',createRoom);$('btnJoinRoom').addEventListener('click',()=>joinRoom($('roomCode').value));$('btnCopyInvite').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('inviteLink').value);setMessage('onlineStatus','Enlace copiado. Envíalo a tu compañero.');}catch{ $('inviteLink').select();document.execCommand('copy');setMessage('onlineStatus','Enlace copiado.');}});
   $('btnVoice').addEventListener('click',()=>call('audio'));$('btnVideo').addEventListener('click',()=>call('video'));$('chatForm').addEventListener('submit',e=>{e.preventDefault();const text=$('chatInput').value.trim();if(text){send({type:'chat',text});addChat(state.user?.username||'Tú',text);$('chatInput').value='';}});
@@ -92,3 +85,4 @@
   loadCatalog().then(()=>refreshProfile());
   const room=new URLSearchParams(location.search).get('room');if(room){$('roomCode').value=room;show('screen-online');if(state.token)connectSocket();}
 })();
+
