@@ -21,6 +21,8 @@
     <header class="topbar">
       <div class="brand">⭐ Salto<span>Estelar</span></div>
       <button id="btnInstall" class="btn btn-ghost install-btn" type="button" hidden>⬇ Instalar</button>
+      <button id="btnAccount" class="btn btn-ghost install-btn" type="button">👤 Cuenta</button>
+      <button id="btnShop" class="btn btn-ghost install-btn" type="button">🛍 Tienda</button>
 
       <div class="hud">
         <div class="chip chip-level"><span class="lbl">Nivel</span><b id="hudLevel">1/100</b></div>
@@ -28,6 +30,7 @@
         <div class="chip chip-coins"><span class="lbl">Monedas</span><b id="hudCoins">0</b></div>
         <div class="chip chip-score"><span class="lbl">Puntos</span><b id="hudScore">0</b></div>
         <div class="chip chip-best"><span class="lbl">Récord</span><b id="hudBest">0</b></div>
+        <div class="chip chip-ammo"><span class="lbl">Balas / llaves</span><b id="hudAmmo">0 / 0</b></div>
       </div>
 
       <div class="actions">
@@ -54,6 +57,7 @@
         </div>
         <button id="btnStart" class="btn btn-primary big">▶ Jugar</button>
         <p class="hint">En el móvil usa los botones en pantalla.</p>
+        <div class="start-actions"><button id="btnOnline" class="btn btn-ghost">🌐 Multijugador</button><button id="btnTargets" class="btn btn-ghost">🎯 Tiro al blanco</button></div>
       </div>
 
       <!-- Pausa -->
@@ -87,8 +91,54 @@
         <button id="btnRetry" class="btn btn-primary big">⟲ Reintentar</button>
       </div>
 
+      <section class="overlay menu-panel" id="screen-account" aria-label="Cuenta y perfil">
+        <button class="panel-close" data-close="screen-account" aria-label="Cerrar">×</button>
+        <h2 class="title small">CUENTA Y PERFIL</h2>
+        <p id="accountStatus" class="subtitle">Entra para guardar tus monedas y progreso en todos tus dispositivos.</p>
+        <div id="authForms" class="form-stack">
+          <label>Nombre de usuario<input id="authUsername" maxlength="20" autocomplete="username" placeholder="Tu nombre"></label>
+          <label>Contraseña<input id="authPassword" type="password" minlength="8" autocomplete="current-password" placeholder="Mínimo 8 caracteres"></label>
+          <div class="start-actions"><button id="btnLogin" class="btn btn-primary">Iniciar sesión</button><button id="btnRegister" class="btn btn-ghost">Crear cuenta</button></div>
+        </div>
+        <div id="profileDetails" class="profile-grid" hidden></div>
+        <div id="achievementList" class="history-list" hidden></div>
+        <div id="historyList" class="history-list" hidden></div>
+        <div id="avatarPicker" class="start-actions" hidden></div>
+        <button id="btnLogout" class="btn btn-ghost" hidden>Cerrar sesión</button>
+      </section>
+
+      <section class="overlay menu-panel" id="screen-online" aria-label="Multijugador">
+        <button class="panel-close" data-close="screen-online" aria-label="Cerrar">×</button>
+        <h2 class="title small">JUGAR EN PAREJA</h2>
+        <p id="onlineStatus" class="subtitle">Inicia sesión para crear una sala privada o unirte con un código.</p>
+        <div class="start-actions"><button id="btnCreateRoom" class="btn btn-primary">＋ Crear sala</button></div>
+        <label class="room-entry">Código de invitación<input id="roomCode" maxlength="8" placeholder="Ej.: A1B2C3D4"></label>
+        <button id="btnJoinRoom" class="btn btn-ghost">Unirme a sala</button>
+        <div id="roomInvite" class="invite-box" hidden><span>Comparte este enlace:</span><input id="inviteLink" readonly><button id="btnCopyInvite" class="btn btn-ghost">Copiar</button></div>
+        <div class="start-actions call-controls"><button id="btnVoice" class="btn btn-ghost" disabled>🎙 Voz</button><button id="btnVideo" class="btn btn-ghost" disabled>📷 Cámara</button></div>
+        <div id="callVideos" class="call-videos" hidden><video id="remoteVideo" autoplay playsinline></video><video id="localVideo" autoplay muted playsinline></video></div>
+        <div id="chatBox" class="chat-box" hidden><div id="chatMessages" class="chat-messages"></div><form id="chatForm"><input id="chatInput" maxlength="250" placeholder="Escribe a tu compañero"><button class="btn btn-primary">Enviar</button></form></div>
+      </section>
+
+      <section class="overlay menu-panel" id="screen-shop" aria-label="Tienda">
+        <button class="panel-close" data-close="screen-shop" aria-label="Cerrar">×</button>
+        <h2 class="title small">TIENDA ESTELAR</h2>
+        <p id="shopBalance" class="subtitle">Inicia sesión para guardar las compras.</p>
+        <div id="shopItems" class="shop-grid"></div>
+      </section>
+
+      <section class="overlay menu-panel" id="screen-targets" aria-label="Tiro al blanco">
+        <button class="panel-close" data-close="screen-targets" aria-label="Cerrar">×</button>
+        <h2 class="title small">TIRO AL BLANCO</h2>
+        <p id="targetScore" class="subtitle">Puntos: 0 · munición: 0</p>
+        <label class="room-entry">Dificultad<select id="targetDifficulty"><option value="easy">Fácil</option><option value="normal" selected>Normal</option><option value="hard">Difícil</option></select></label>
+        <div id="targetArena" class="target-arena"><button class="moving-target" aria-label="Blanco móvil">🎯</button></div>
+        <div class="start-actions"><button id="btnTargetStart" class="btn btn-primary">Iniciar ronda</button><button class="btn btn-ghost" data-close="screen-targets">Salir</button></div>
+      </section>
+
       <!-- Banner de nivel -->
       <div class="banner" id="banner"><span id="bannerText"></span></div>
+      <div id="wordProgress" class="word-progress" aria-live="polite">Palabra: _ _ _ _</div>
 
       <!-- Controles táctiles -->
       <div class="touch-controls" id="touchControls">
@@ -98,14 +148,15 @@
         </div>
         <div class="pad">
           <button class="touch-btn jump" id="btnJump" aria-label="Saltar">▲</button>
+          <button class="touch-btn shoot" id="btnShoot" aria-label="Disparar">✦</button>
         </div>
       </div>
     </div>
 
   </div>
   <script src="game.js" defer></script>
+  <script src="online.js" defer></script>
   <script src="pwa.js" defer></script>
 </body>
 </html>
-
 

@@ -7,6 +7,7 @@ INICIAR EN EL COMPUTADOR
 2. Abre CMD y escribe:
 
    cd /d "C:\Users\pedro luis\Desktop\salto extelar"
+   npm install
    npm start
 
 3. CMD indicará la dirección y el puerto libres, por ejemplo:
@@ -17,7 +18,8 @@ INICIAR EN EL COMPUTADOR
    Para detener el servidor, vuelve a CMD y presiona Ctrl+C.
 
 El servidor prueba automáticamente los puertos 3006 a 3100 y usa el primero
-que encuentre libre. Ya no es necesario ejecutar npm install para el juego.
+que encuentre libre. Las cuentas locales se guardan en la carpeta data.
+Las salas multijugador funcionan mientras ese servidor siga encendido.
 
 ABRIR EN UN TELÉFONO POR WI-FI
 
@@ -32,6 +34,9 @@ ABRIR EN UN TELÉFONO POR WI-FI
 Para instalar como app web (PWA), publica el sitio en Render y usa su dirección
 HTTPS en el teléfono. El navegador no permite instalar una PWA desde localhost
 ni desde una dirección HTTP de red local.
+Las videollamadas requieren la dirección HTTPS pública y permisos de cámara y
+micrófono. Para sincronizar cuentas entre computadores, el servidor debe tener
+PostgreSQL conectado mediante DATABASE_URL.
 
 CREAR UN APK ANDROID DESDE LA CARPETA app
 
@@ -42,7 +47,7 @@ sin Play Store y sin publicar el APK.
 1. Instala/abre Android Studio.
 2. En Android Studio, elige Open y selecciona esta carpeta del proyecto:
    C:\Users\pedro luis\Desktop\salto extelar\app
-3. Si Android Studio solicita componentes, instala Android SDK Platform 35 y
+3. Si Android Studio solicita componentes, instala Android SDK Platform 36 y
    Android SDK Build-Tools desde Tools > SDK Manager. Acepta la descarga de las
    herramientas de compilación que solicite Gradle.
 4. Espera a que termine “Gradle Sync”. En el menú Build elige “Build Bundle(s) /
@@ -53,5 +58,6 @@ sin Play Store y sin publicar el APK.
    Si Android lo solicita, permite instalar aplicaciones desde esa fuente.
 
 Para una actualización futura, vuelve a compilar el APK y reinstálalo. La copia
-que está dentro de app funciona sin Render ni Internet y guarda el récord en el
-teléfono. El progreso no se sincroniza con el juego de navegador.
+que está dentro de app funciona sin Internet para jugar individualmente. La app
+abre el servicio HTTPS para las cuentas, salas online y sincronización. El
+progreso offline queda en ese teléfono y no se sube hasta iniciar sesión online.

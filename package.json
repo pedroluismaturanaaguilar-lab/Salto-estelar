@@ -2,8 +2,16 @@
   "name": "salto-estelar",
   "version": "1.0.0",
   "private": true,
-  "description": "Juego web Salto Estelar desplegable en Render, sin dependencias de servidor externas",
+  "description": "Salto Estelar: juego de plataformas cooperativo online, perfiles y progreso persistente",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=20" }
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  }
 }
