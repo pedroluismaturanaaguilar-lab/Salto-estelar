@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.saltoestelar.mobile">
+    <application android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:label="Salto Estelar" android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher" android:allowBackup="true" android:supportsRtl="true">
+        <activity android:name=".MainActivity" android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="unspecified" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+
+

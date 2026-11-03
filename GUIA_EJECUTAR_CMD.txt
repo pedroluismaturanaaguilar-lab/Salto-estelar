@@ -1,0 +1,57 @@
+SALTO ESTELAR — GUÍA DE USO
+===========================
+
+INICIAR EN EL COMPUTADOR
+
+1. Instala Node.js LTS desde https://nodejs.org/ si aún no está instalado.
+2. Abre CMD y escribe:
+
+   cd /d "C:\Users\pedro luis\Desktop\salto extelar"
+   npm start
+
+3. CMD indicará la dirección y el puerto libres, por ejemplo:
+
+   Salto Estelar disponible en http://localhost:3006
+
+4. Abre esa dirección exacta en el navegador. Deja CMD abierto mientras juegas.
+   Para detener el servidor, vuelve a CMD y presiona Ctrl+C.
+
+El servidor prueba automáticamente los puertos 3006 a 3100 y usa el primero
+que encuentre libre. Ya no es necesario ejecutar npm install para el juego.
+
+ABRIR EN UN TELÉFONO POR WI-FI
+
+1. Conecta el teléfono y el computador a la misma red Wi-Fi.
+2. En otra ventana de CMD escribe ipconfig y encuentra la Dirección IPv4 del
+   adaptador Wi-Fi (por ejemplo 192.168.1.25).
+3. En el teléfono abre http://192.168.1.25:PUERTO, reemplazando el ejemplo por
+   la IPv4 real y PUERTO por el puerto que CMD mostró. Ejemplo:
+   http://192.168.1.25:3006
+4. Permite a Node.js el acceso a redes privadas si Windows lo pregunta.
+
+Para instalar como app web (PWA), publica el sitio en Render y usa su dirección
+HTTPS en el teléfono. El navegador no permite instalar una PWA desde localhost
+ni desde una dirección HTTP de red local.
+
+CREAR UN APK ANDROID DESDE LA CARPETA app
+
+La carpeta app contiene una copia del juego y un proyecto Android Studio que lo
+abre como aplicación a pantalla completa. Se instala directamente en Android,
+sin Play Store y sin publicar el APK.
+
+1. Instala/abre Android Studio.
+2. En Android Studio, elige Open y selecciona esta carpeta del proyecto:
+   C:\Users\pedro luis\Desktop\salto extelar\app
+3. Si Android Studio solicita componentes, instala Android SDK Platform 35 y
+   Android SDK Build-Tools desde Tools > SDK Manager. Acepta la descarga de las
+   herramientas de compilación que solicite Gradle.
+4. Espera a que termine “Gradle Sync”. En el menú Build elige “Build Bundle(s) /
+   APK(s)” > “Build APK(s)”.
+5. El APK de prueba aparecerá en:
+   app\app\build\outputs\apk\debug\app-debug.apk
+6. Copia app-debug.apk al teléfono (USB, correo, Drive o mensajería) y ábrelo.
+   Si Android lo solicita, permite instalar aplicaciones desde esa fuente.
+
+Para una actualización futura, vuelve a compilar el APK y reinstálalo. La copia
+que está dentro de app funciona sin Render ni Internet y guarda el récord en el
+teléfono. El progreso no se sincroniza con el juego de navegador.
