@@ -1,4 +1,4 @@
-const CACHE = 'salto-estelar-v3';
+const CACHE = 'salto-estelar-v4';
 const CORE = ['/', '/index.html', '/styles.css', '/game.js', '/online.js', '/pwa.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)));
@@ -16,5 +16,6 @@ self.addEventListener('fetch', event => {
     return response;
   })));
 });
+
 
 

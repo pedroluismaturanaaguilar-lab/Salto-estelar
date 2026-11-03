@@ -107,8 +107,6 @@
     .chat-messages { display:flex; flex-direction:column; align-items:flex-start; gap:3px; max-height:95px; overflow:auto; font-size:.7rem; }
     #chatForm { display:flex; gap:5px; margin-top:6px; }
     #chatForm .btn { padding:6px 10px; font-size:.7rem; }
-    .target-arena { position:relative; width:min(560px,100%); height:190px; border-radius:18px; overflow:hidden; border:1px solid rgba(76,201,240,.4); background:radial-gradient(ellipse,#1b2864,#080c20); cursor:crosshair; }
-    .moving-target { position:absolute; left:42%; top:38%; border:0; background:transparent; font-size:2.2rem; cursor:crosshair; touch-action:manipulation; transition:left .16s linear,top .16s linear; }
     .chip-ammo b { color:#fd86ef; }
 
     .icon-btn {
@@ -347,10 +345,21 @@
 
     @media (orientation:portrait) and (max-width:760px) {
       body.is-touch { display:block; padding:0; overflow:hidden; }
-      .game-shell { width:100vw; height:100dvh; max-height:none; gap:0; }
-      .topbar { flex:0 0 auto; border-radius:0; }
-      .stage { width:100vw; height:calc(100dvh - 64px); max-height:none; border-radius:0; aspect-ratio:auto; }
-      .orientation-hint { position:fixed; inset:0; z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; padding:32px; background:rgba(5,8,24,.96); color:#fff; text-align:center; font-size:clamp(1.3rem,6vw,2rem); font-weight:800; }
+      /* The browser cannot force physical rotation unless the game is installed.
+         Rotate the play surface itself so it still appears landscape in mobile browsers. */
+      body.is-touch .game-shell { position:fixed; top:50%; left:50%; width:100dvh; height:100dvw; max-height:none; gap:4px; transform:translate(-50%,-50%) rotate(90deg); transform-origin:center; }
+      body.is-touch .topbar { flex:0 0 auto; border-radius:0; flex-wrap:nowrap; gap:5px; padding:4px 7px; }
+      body.is-touch .hud { flex-wrap:nowrap; gap:3px; }
+      body.is-touch .chip { min-width:42px; padding:2px 4px; }
+      body.is-touch .chip .lbl { font-size:.42rem; }
+      body.is-touch .chip b { font-size:.7rem; }
+      body.is-touch .actions .icon-btn { width:30px; height:30px; }
+      body.is-touch .stage { width:100%; height:calc(100% - 48px); max-height:none; border-radius:0; aspect-ratio:auto; }
+      body.is-touch .touch-controls { padding:0 max(7px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(7px,env(safe-area-inset-left)); }
+      body.is-touch .touch-btn { width:42px; height:42px; }
+      body.is-touch .touch-btn.jump { width:49px; height:49px; }
+      body.is-touch .touch-btn.shoot { width:39px; height:39px; }
+      .orientation-hint { display:none !important; }
     }
 
     @media (orientation:landscape) and (max-height:500px) {
@@ -391,3 +400,4 @@
     }
 .install-btn { padding: 8px 12px; font-size: 0.78rem; }
 .install-btn[hidden] { display: none; }
+

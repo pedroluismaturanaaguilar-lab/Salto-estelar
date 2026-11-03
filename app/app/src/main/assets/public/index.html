@@ -48,16 +48,16 @@
       <div class="overlay show" id="screen-start">
         <h1 class="title">SALTO ESTELAR</h1>
         <p class="subtitle">
-          Recoge monedas, salta sobre los enemigos y llega a la bandera.<br>
+          Recoge frutas: cada una te da 20 balas. Dispara a los enemigos y llega a la bandera.<br>
           ¡100 niveles te esperan, cada uno más difícil!
         </p>
         <div class="keys">
           <span><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> Mover</span>
-          <span><kbd>Espacio</kbd> Saltar</span>
+          <span><kbd>Espacio</kbd> Saltar · <kbd>F</kbd> Disparar</span>
         </div>
         <button id="btnStart" class="btn btn-primary big">▶ Jugar</button>
         <p class="hint">En el móvil usa los botones en pantalla.</p>
-        <div class="start-actions"><button id="btnOnline" class="btn btn-ghost">🌐 Multijugador</button><button id="btnTargets" class="btn btn-ghost">🎯 Tiro al blanco</button></div>
+        <div class="start-actions"><button id="btnOnline" class="btn btn-ghost">🌐 Multijugador</button></div>
       </div>
 
       <!-- Pausa -->
@@ -127,15 +127,6 @@
         <div id="shopItems" class="shop-grid"></div>
       </section>
 
-      <section class="overlay menu-panel" id="screen-targets" aria-label="Tiro al blanco">
-        <button class="panel-close" data-close="screen-targets" aria-label="Cerrar">×</button>
-        <h2 class="title small">TIRO AL BLANCO</h2>
-        <p id="targetScore" class="subtitle">Puntos: 0 · munición: 0</p>
-        <label class="room-entry">Dificultad<select id="targetDifficulty"><option value="easy">Fácil</option><option value="normal" selected>Normal</option><option value="hard">Difícil</option></select></label>
-        <div id="targetArena" class="target-arena"><button class="moving-target" aria-label="Blanco móvil">🎯</button></div>
-        <div class="start-actions"><button id="btnTargetStart" class="btn btn-primary">Iniciar ronda</button><button class="btn btn-ghost" data-close="screen-targets">Salir</button></div>
-      </section>
-
       <!-- Banner de nivel -->
       <div class="banner" id="banner"><span id="bannerText"></span></div>
       <div id="wordProgress" class="word-progress" aria-live="polite">Palabra: _ _ _ _</div>
@@ -160,4 +151,5 @@
   <script src="pwa.js" defer></script>
 </body>
 </html>
+
 
