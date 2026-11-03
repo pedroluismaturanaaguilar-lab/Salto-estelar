@@ -1,0 +1,11 @@
+node_modules/
+.env
+**/.gradle/
+**/build/
+**/.tmp/
+**/local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+**/.idea/

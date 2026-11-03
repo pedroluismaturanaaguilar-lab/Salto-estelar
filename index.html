@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1026" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Salto Estelar" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icons/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <title>Salto Estelar · Juego de Plataformas</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+  <div class="game-shell">
+
+    <!-- ================= BARRA SUPERIOR / HUD ================= -->
+    <header class="topbar">
+      <div class="brand">⭐ Salto<span>Estelar</span></div>
+      <button id="btnInstall" class="btn btn-ghost install-btn" type="button" hidden>⬇ Instalar</button>
+
+      <div class="hud">
+        <div class="chip chip-level"><span class="lbl">Nivel</span><b id="hudLevel">1/100</b></div>
+        <div class="chip chip-lives"><span class="lbl">Vidas</span><b id="hudLives">❤❤❤</b></div>
+        <div class="chip chip-coins"><span class="lbl">Monedas</span><b id="hudCoins">0</b></div>
+        <div class="chip chip-score"><span class="lbl">Puntos</span><b id="hudScore">0</b></div>
+        <div class="chip chip-best"><span class="lbl">Récord</span><b id="hudBest">0</b></div>
+      </div>
+
+      <div class="actions">
+        <button id="btnPause" class="icon-btn" title="Pausa (P)">⏸</button>
+        <button id="btnRestart" class="icon-btn" title="Reiniciar (R)">⟲</button>
+        <button id="btnSound" class="icon-btn" title="Sonido (M)">🔊</button>
+      </div>
+    </header>
+
+    <!-- ================= ESCENARIO ================= -->
+    <div class="stage">
+      <canvas id="game" width="960" height="540"></canvas>
+
+      <!-- Pantalla de inicio -->
+      <div class="overlay show" id="screen-start">
+        <h1 class="title">SALTO ESTELAR</h1>
+        <p class="subtitle">
+          Recoge monedas, salta sobre los enemigos y llega a la bandera.<br>
+          ¡100 niveles te esperan, cada uno más difícil!
+        </p>
+        <div class="keys">
+          <span><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> Mover</span>
+          <span><kbd>Espacio</kbd> Saltar</span>
+        </div>
+        <button id="btnStart" class="btn btn-primary big">▶ Jugar</button>
+        <p class="hint">En el móvil usa los botones en pantalla.</p>
+      </div>
+
+      <!-- Pausa -->
+      <div class="overlay" id="screen-pause">
+        <h2 class="title small">PAUSA</h2>
+        <button id="btnResume" class="btn btn-primary">▶ Continuar</button>
+        <button id="btnRestartPause" class="btn btn-ghost">⟲ Reiniciar</button>
+      </div>
+
+      <!-- Victoria -->
+      <div class="overlay" id="screen-victory">
+        <h2 class="title win">¡VICTORIA!</h2>
+        <p class="subtitle">Has completado los 100 niveles 🎉</p>
+        <div class="stats">
+          <div><span>Puntos</span><b id="vicScore">0</b></div>
+          <div><span>Monedas</span><b id="vicCoins">0</b></div>
+          <div><span>Récord</span><b id="vicBest">0</b></div>
+        </div>
+        <button id="btnPlayAgain" class="btn btn-primary big">▶ Jugar de nuevo</button>
+      </div>
+
+      <!-- Derrota -->
+      <div class="overlay" id="screen-defeat">
+        <h2 class="title lose">GAME OVER</h2>
+        <p class="subtitle">Te has quedado sin vidas…</p>
+        <div class="stats">
+          <div><span>Nivel</span><b id="defLevel">1</b></div>
+          <div><span>Puntos</span><b id="defScore">0</b></div>
+          <div><span>Récord</span><b id="defBest">0</b></div>
+        </div>
+        <button id="btnRetry" class="btn btn-primary big">⟲ Reintentar</button>
+      </div>
+
+      <!-- Banner de nivel -->
+      <div class="banner" id="banner"><span id="bannerText"></span></div>
+
+      <!-- Controles táctiles -->
+      <div class="touch-controls" id="touchControls">
+        <div class="pad">
+          <button class="touch-btn" id="btnLeft" aria-label="Izquierda">◀</button>
+          <button class="touch-btn" id="btnRight" aria-label="Derecha">▶</button>
+        </div>
+        <div class="pad">
+          <button class="touch-btn jump" id="btnJump" aria-label="Saltar">▲</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <script src="/game.js" defer></script>
+  <script src="/pwa.js" defer></script>
+</body>
+</html>
+
