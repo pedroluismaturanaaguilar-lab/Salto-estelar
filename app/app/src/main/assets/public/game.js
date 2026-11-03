@@ -32,6 +32,7 @@
     const MAX_STEPS = 10;
 
     const BEST_KEY = 'saltoEstelar.best';
+    const LEVEL_WORDS = ['AMOR','GATO','PERRO','AMISTAD','ESTRELLA','LUNA','SOL','PLANETA','GALAXIA','COMETA','COHETE','ASTRONAUTA','UNIVERSO','ORBITA','SATELITE','NEBULOSA','MARTE','TIERRA','VENUS','JUPITER','SATURNO','MERCURIO','NEPTUNO','PLUTON','COSMOS','BRILLO','NOCHE','CIELO','NUBE','LLUVIA','ARCOIRIS','MONTAÑA','BOSQUE','RIO','LAGO','OCEANO','PLAYA','ISLA','FUEGO','HIELO','VIENTO','NIEVE','FLOR','ARBOL','HOJA','FRUTA','MANZANA','CEREZA','BANANO','NARANJA','MUSICA','DANZA','JUEGO','SUEÑO','MAGIA','VALIENTE','ALEGRIA','SONRISA','FAMILIA','ESCUELA','LIBRO','PINTURA','DIBUJO','AMABLE','RESPETO','ESPERANZA','AVENTURA','CAMINO','TESORO','LLAVE','COFRE','AMIGO','AMIGA','EQUIPO','FUERZA','PODER','ENERGIA','VELOCIDAD','SALTO','CARRERA','META','VICTORIA','CAMPEON','MEDALLA','PREMIO','MONEDA','CORAZON','MARIPOSA','TORTUGA','CONEJO','DELFIN','BALLENA','AGUILA','LEON','TIGRE','DRAGON','FANTASIA','FUTURO','INFINITO','COMPARTIR'];
 
     /* ==========================================================
        2. UTILIDADES
@@ -129,6 +130,9 @@
       lives: 3,
       score: 0,
       coins: 0,
+      bullets: 0,
+      keys: 0,
+      wordProgress: [],
       best: loadBest(),
       time: 0,
       shake: 0
@@ -151,6 +155,8 @@
     let world  = null;
     const particles = [];
     const texts     = [];
+    const bullets = [];
+    let remotePlayer = null;
 
     /* ==========================================================
        5. GENERACIÓN DE NIVELES
@@ -160,7 +166,7 @@
       return {
         x, y: surfaceY - h, w, h,
         minX, maxX, speed,
-        dir: Math.random() < 0.5 ? -1 : 1,
+        dir: Math.floor(x + surfaceY) % 2 ? 1 : -1,
         alive: true,
         anim: Math.random() * Math.PI * 2
       };
@@ -174,6 +180,9 @@
       const coins     = [];
       const enemies   = [];
       const spikes    = [];
+      const ammo      = [];
+      const keys      = [];
+      const chests    = [];
       const segments  = [];
 
       let x = 0;
@@ -260,10 +269,22 @@
 
       const last = segments[segments.length - 1];
       const goal = { x: last.x + last.w - 120, y: GROUND_Y - 130, w: 44, h: 130 };
+      enemies.forEach((enemy,i)=>enemy.id='l'+index+':enemy:'+i);
+      const word = LEVEL_WORDS[index % LEVEL_WORDS.length];
+      const letters = [...word].map((letter,i)=>{const s=segments[1+Math.min(segments.length-3,Math.floor((i+1)*(segments.length-2)/(word.length+1)))];return {id:'l'+index+':letter:'+i,letter,x:s.x+Math.max(45,Math.min(s.w-45,50+(s.w-100)*((i+1)/(word.length+1)))),y:GROUND_Y-78,r:14,taken:false};});
+      if (segments.length>2) {
+        const ammoSeg=segments[1+(index%Math.max(1,segments.length-2))];
+        if(index%2===0)ammo.push({id:'l'+index+':ammo:0',x:ammoSeg.x+Math.max(70,ammoSeg.w*.55),y:GROUND_Y-65,taken:false});
+        const keySeg=segments[1+((index+1)%Math.max(1,segments.length-2))];
+        keys.push({id:'l'+index+':key:0',x:keySeg.x+Math.max(65,keySeg.w*.35),y:GROUND_Y-70,taken:false});
+        const chestSeg=segments[1+((index+2)%Math.max(1,segments.length-2))];
+        chests.push({id:'l'+index+':chest:0',x:chestSeg.x+Math.max(90,chestSeg.w*.72),y:GROUND_Y-42,w:34,h:34,opened:false});
+      }
+      coins.forEach((item,i)=>item.id='l'+index+':coin:'+i);
 
       return {
         width: worldWidth,
-        platforms, coins, enemies, spikes, segments, goal,
+        platforms, coins, enemies, spikes, segments, goal, letters, word, ammo, keys, chests,
         spawn: { x: 60, y: GROUND_Y - player.h - 2 }
       };
     }
@@ -274,6 +295,8 @@
     function loadLevel(index) {
       world = generateLevel(index);
       State.level = index;
+      State.wordProgress = new Array(world.word.length).fill('');
+      bullets.length = 0;
 
       player.x = world.spawn.x;
       player.y = world.spawn.y;
@@ -297,6 +320,9 @@
       State.lives = 3;
       State.score = 0;
       State.coins = 0;
+      State.bullets = 0;
+      State.keys = 0;
+      window.SaltoOnline?.startRun();
       keys.left = keys.right = keys.jump = false;
 
       loadLevel(0);
@@ -442,13 +468,25 @@
         if (Math.abs(c.x - (p.x + p.w / 2)) < c.r + p.w / 2 &&
             Math.abs(c.y - (p.y + p.h / 2)) < c.r + p.h / 2) {
           c.taken = true;
+          publishEvent('collect',c.id);
           State.coins++;
           State.score += 10;
           Sound.coin();
           spawnParticles(c.x, c.y, '#ffd166', 9);
           addText(c.x, c.y - 8, '+10', '#ffd166');
           updateHUD();
+          if(window.SaltoOnline&&!window.SaltoOnline.active)window.SaltoOnline.reward(1,c.id);
         }
+      }
+
+      for (const item of world.letters) {
+        if(item.taken)continue;
+        if(Math.abs(item.x-(p.x+p.w/2))<24&&Math.abs(item.y-(p.y+p.h/2))<34){item.taken=true;const idx=Number(item.id.split(':').pop());State.wordProgress[idx]=item.letter;publishEvent('letter',item.id);Sound.coin();addText(item.x,item.y-12,item.letter,'#8df3ff');updateHUD(true);}
+      }
+      for (const item of world.ammo) if(!item.taken&&Math.abs(item.x-(p.x+p.w/2))<30&&Math.abs(item.y-(p.y+p.h/2))<34){item.taken=true;State.bullets+=5;publishEvent('collect',item.id);addText(item.x,item.y-12,'+5 ✦','#fd86ef');Sound.coin();updateHUD(true);}
+      for (const item of world.keys) if(!item.taken&&Math.abs(item.x-(p.x+p.w/2))<28&&Math.abs(item.y-(p.y+p.h/2))<35){item.taken=true;State.keys++;publishEvent('collect',item.id);addText(item.x,item.y-12,'🔑','#ffe58a');spawnParticles(item.x,item.y,'#ffe58a',8);Sound.coin();updateHUD(true);}
+      for (const chest of world.chests) if(!chest.opened&&aabb(p,chest)){
+        if(State.keys>0){chest.opened=true;State.keys--;const reward=Math.floor((world.width+State.level*17)%3);publishEvent('chest',chest.id,{reward});if(!window.SaltoOnline?.active)grantChestReward(reward,chest);Sound.levelUp();spawnParticles(chest.x,chest.y,'#ffd166',16);updateHUD(true);}else addText(chest.x,chest.y-12,'Necesitas llave','#ffe58a');
       }
 
       for (const s of world.spikes) {
@@ -463,6 +501,7 @@
 
         if (stomping) {
           e.alive = false;
+          publishEvent('enemy',e.id,{points:50});
           p.vy = -STOMP_BOUNCE;
           p.jumpBuffer = 0;
           State.score += 50;
@@ -479,6 +518,14 @@
       if (aabb(p, world.goal)) reachGoal();
     }
 
+    function publishEvent(kind,id,extra={}){if(id&&window.SaltoOnline)window.SaltoOnline.gameEvent({kind,id,level:State.level,...extra});}
+    function grantChestReward(reward,chest){if(reward===0){State.coins+=10;if(window.SaltoOnline&&!window.SaltoOnline.active)window.SaltoOnline.reward(10,chest.id+':coins');addText(chest.x,chest.y-18,'+10 monedas','#ffd166');}else if(reward===1){State.bullets+=8;addText(chest.x,chest.y-18,'+8 balas','#fd86ef');}else{State.lives=Math.min(5,State.lives+1);addText(chest.x,chest.y-18,'+1 vida','#43e97b');}updateHUD(true);}
+    function applySharedEvent(event){if(!world||!event||event.level!==State.level)return;for(const group of [world.coins,world.letters,world.ammo,world.keys]){const item=group.find(x=>x.id===event.id);if(item){item.taken=true;if(group===world.letters){const idx=Number(item.id.split(':').pop());State.wordProgress[idx]=item.letter;updateHUD(true);}return;}}const chest=world.chests.find(x=>x.id===event.id);if(chest){chest.opened=true;return;}const enemy=world.enemies.find(x=>x.id===event.id);if(enemy)enemy.alive=false;}
+    function confirmSharedEvent(event){if(!world||event.level!==State.level)return;const chest=world.chests.find(x=>x.id===event.id);if(chest)grantChestReward(event.reward,chest);}
+    function rejectSharedEvent(event){if(!world)return;const data=typeof event==='string'?{id:event}:event,id=data.id;const c=world.coins.find(x=>x.id===id);if(c){c.taken=false;State.coins=Math.max(0,State.coins-1);State.score=Math.max(0,State.score-10);}const a=world.ammo.find(x=>x.id===id);if(a){a.taken=false;State.bullets=Math.max(0,State.bullets-5);}const k=world.keys.find(x=>x.id===id);if(k){k.taken=false;State.keys=Math.max(0,State.keys-1);}const l=world.letters.find(x=>x.id===id);if(l){l.taken=false;State.wordProgress[Number(id.split(':').pop())]='';}const chest=world.chests.find(x=>x.id===id);if(chest){chest.opened=false;State.keys++;}const enemy=world.enemies.find(x=>x.id===id);if(enemy){enemy.alive=true;State.score=Math.max(0,State.score-(Number(data.points)||0));}updateHUD(true);}
+
+    function fireShot(){if(State.mode!=='playing'||State.bullets<=0)return;State.bullets--;bullets.push({x:player.x+player.w/2+player.facing*20,y:player.y+20,vx:player.facing*620,life:1.1});Sound.stomp();updateHUD(true);}
+
     /* ==========================================================
        9. DAÑO / RESPAWN / NIVEL
        ========================================================== */
@@ -492,7 +539,7 @@
       spawnParticles(player.x + player.w / 2, player.y + player.h / 2, '#f72585', 20);
       updateHUD();
 
-      if (State.lives <= 0) gameOver();
+      if (State.lives <= 0) handleNoLives();
       else respawnPlayer();
     }
 
@@ -502,7 +549,7 @@
       Sound.hurt();
       updateHUD();
 
-      if (State.lives <= 0) gameOver();
+      if (State.lives <= 0) handleNoLives();
       else respawnPlayer();
     }
 
@@ -528,14 +575,21 @@
       cam.x = clamp(player.x + player.w / 2 - VIEW_W * 0.4, 0, Math.max(0, world.width - VIEW_W));
     }
 
+    function handleNoLives(){if(window.SaltoOnline?.active&&window.SaltoOnline.requestRevive()){State.mode='waiting';showBanner('TU COMPAÑERO TE AYUDA');return;}gameOver();}
+    function reviveWithPartner(){State.lives=1;respawnPlayer();State.mode='playing';showScreen(null);showBanner('¡REVIVISTE EN EQUIPO!');updateHUD(true);}
+
     function reachGoal() {
       if (State.mode !== 'playing') return;
+      if(State.wordProgress.join('')===world.word){State.score+=100;State.coins+=10;if(window.SaltoOnline)window.SaltoOnline.reward(10,'l'+State.level+':word-bonus');spawnParticles(player.x,player.y,'#8df3ff',18);addText(player.x,player.y-18,'PALABRA +100','#8df3ff');}
+      if(window.SaltoOnline?.active&&!window.SaltoOnline.host){State.mode='waiting';window.SaltoOnline.goalReached(State.level);showBanner('ESPERANDO AL ANFITRIÓN');return;}
 
       State.score += 250;
       Sound.levelUp();
       spawnParticles(world.goal.x + 20, world.goal.y + 30, '#43e97b', 22);
 
       State.level++;
+      if(window.SaltoOnline?.active)window.SaltoOnline.levelChanged(State.level);
+      if(window.SaltoOnline)window.SaltoOnline.matchProgress({level:State.level,score:State.score,coins:State.coins,completed:true,distance:player.x});
       if (State.level >= LEVEL_COUNT) {
         victory();
         return;
@@ -641,9 +695,11 @@
 
     function drawBackground() {
       const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
-      g.addColorStop(0,   '#080d26');
-      g.addColorStop(0.5, '#182a63');
-      g.addColorStop(1,   '#2f4bb0');
+      const bg=window.SaltoOnline?.profile?.background;
+      if(bg==='bg_ice'){g.addColorStop(0,'#092b50');g.addColorStop(.5,'#17638a');g.addColorStop(1,'#afebf7');}
+      else if(bg==='bg_halloween'){g.addColorStop(0,'#210a3b');g.addColorStop(.5,'#542064');g.addColorStop(1,'#c04b27');}
+      else if(bg==='bg_space'){g.addColorStop(0,'#080a25');g.addColorStop(.5,'#17235b');g.addColorStop(1,'#462d7c');}
+      else {g.addColorStop(0,'#080d26');g.addColorStop(.5,'#182a63');g.addColorStop(1,'#2f4bb0');}
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
@@ -689,10 +745,16 @@
         if (c.taken) continue;
         if (c.x > cam.x - 40 && c.x < cam.x + VIEW_W + 40) drawCoin(c);
       }
+      for(const l of world.letters)if(!l.taken&&l.x>cam.x-30&&l.x<cam.x+VIEW_W+30){ctx.save();ctx.fillStyle='#8df3ff';ctx.shadowColor='#4cc9f0';ctx.shadowBlur=14;ctx.font='bold 18px system-ui';ctx.textAlign='center';ctx.fillText(l.letter,l.x,l.y);ctx.restore();}
+      for(const a of world.ammo)if(!a.taken){ctx.font='20px system-ui';ctx.fillText('🍓',a.x-10,a.y+7);}
+      for(const k of world.keys)if(!k.taken){ctx.font='19px system-ui';ctx.fillText('🔑',k.x-10,k.y+7);}
+      for(const c of world.chests)drawChest(c);
+      for(const b of bullets){ctx.fillStyle='#fd86ef';ctx.shadowColor='#fd86ef';ctx.shadowBlur=8;ctx.beginPath();ctx.arc(b.x,b.y,5,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
 
       for (const e of world.enemies) {
         if (e.alive && inView(e)) drawEnemy(e);
       }
+      if(remotePlayer&&remotePlayer.level===State.level)drawRemotePlayer(remotePlayer);
     }
 
     function drawPlatform(p) {
@@ -773,6 +835,8 @@
       ctx.stroke();
       ctx.restore();
     }
+
+    function drawChest(c){ctx.save();ctx.fillStyle=c.opened?'#806341':'#b87535';roundRect(c.x,c.y+8,c.w,c.h-8,6);ctx.fill();ctx.fillStyle='#d89546';ctx.translate(c.x+4,c.y+9);ctx.rotate(c.opened?-.3:0);roundRect(0,-7,c.w-8,13,5);ctx.fill();ctx.restore();ctx.fillStyle='#ffd166';ctx.fillRect(c.x+14,c.y+17,6,9);}
 
     function drawEnemy(e) {
       const bob = Math.sin(e.anim) * 2;
@@ -872,9 +936,11 @@
       const x = cx - w / 2;
       const y = bottom - h;
 
+      const avatar=window.SaltoOnline?.profile?.avatar||'avatar_blue';
+      const avatarColor=avatar==='avatar_rose'?'#f72585':avatar==='avatar_gold'?'#ffd166':'#2b7fd4';
       const g = ctx.createLinearGradient(x, y, x, y + h);
       g.addColorStop(0, '#8df3ff');
-      g.addColorStop(1, '#2b7fd4');
+      g.addColorStop(1, avatarColor);
       ctx.save();
       ctx.shadowColor = 'rgba(76,201,240,.65)';
       ctx.shadowBlur  = 18;
@@ -882,6 +948,9 @@
       roundRect(x, y, w, h, 12);
       ctx.fill();
       ctx.restore();
+      const accessory=window.SaltoOnline?.profile?.accessory;
+      if(accessory==='hat_crown'){ctx.fillStyle='#ffd166';ctx.beginPath();ctx.moveTo(x+4,y+5);ctx.lineTo(x+9,y-5);ctx.lineTo(x+16,y+2);ctx.lineTo(x+23,y-5);ctx.lineTo(x+30,y+5);ctx.closePath();ctx.fill();}
+      else if(accessory==='hat_astronaut'){ctx.strokeStyle='#d9f4ff';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(cx,y+2,14,7,0,Math.PI,Math.PI*2);ctx.stroke();}
 
       ctx.fillStyle = 'rgba(255,255,255,.35)';
       roundRect(x + 5, y + 5, w * 0.34, h * 0.26, 6);
@@ -897,6 +966,8 @@
       ctx.beginPath(); ctx.arc(cx - 7 + eyeDX * 0.5, eyeY + 1, 2.5, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(cx + 7 + eyeDX * 0.5, eyeY + 1, 2.5, 0, Math.PI * 2); ctx.fill();
     }
+
+    function drawRemotePlayer(p){if(!p||!Number.isFinite(p.x))return;ctx.save();ctx.globalAlpha=.82;const color=p.avatar==='avatar_rose'?'#f72585':p.avatar==='avatar_gold'?'#ffd166':'#7b5cff';const g=ctx.createLinearGradient(p.x,p.y,p.x,p.y+44);g.addColorStop(0,'#eaf2ff');g.addColorStop(1,color);ctx.fillStyle=g;roundRect(p.x,p.y,34,44,12);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p.x+11,p.y+16,4,0,Math.PI*2);ctx.arc(p.x+23,p.y+16,4,0,Math.PI*2);ctx.fill();ctx.font='11px system-ui';ctx.textAlign='center';ctx.fillStyle='#fff';ctx.fillText(p.username||'Compañero',p.x+17,p.y-8);ctx.restore();}
 
     function render(dt) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -918,6 +989,7 @@
       ctx.save();
       ctx.translate(-Math.round(cam.x), 0);
       if (world) {
+        bullets.forEach((b,i)=>{b.x+=b.vx*dt;b.life-=dt;if(b.life<=0){bullets.splice(i,1);return;}for(const e of world.enemies){if(e.alive&&Math.abs(b.x-(e.x+e.w/2))<22&&Math.abs(b.y-(e.y+e.h/2))<22){e.alive=false;publishEvent('enemy',e.id,{points:25});bullets.splice(i,1);State.score+=25;spawnParticles(e.x,e.y,'#fd86ef',12);updateHUD();break;}}});
         drawWorld();
         drawPlayer();
         drawParticles();
@@ -978,7 +1050,7 @@
     let hudCache = '';
 
     function updateHUD(force) {
-      const sig = [State.level, State.lives, State.coins, State.score, State.best].join('|');
+      const sig = [State.level, State.lives, State.coins, State.score, State.best,State.bullets,State.keys,State.wordProgress.join('')].join('|');
       if (!force && sig === hudCache) return;
       hudCache = sig;
 
@@ -988,6 +1060,8 @@
       el.hudCoins.textContent = State.coins;
       el.hudScore.textContent = State.score;
       el.hudBest.textContent  = State.best;
+      const ammoNode=document.getElementById('hudAmmo');if(ammoNode)ammoNode.textContent=State.bullets+' / '+State.keys;
+      const wordNode=document.getElementById('wordProgress');if(wordNode&&world)wordNode.textContent='Palabra: '+world.word.split('').map((ch,i)=>State.wordProgress[i]||'＿').join(' ');
     }
 
     function showScreen(id) {
@@ -1022,6 +1096,7 @@
       if (k === 'arrowleft'  || k === 'a') keys.left  = true;
       if (k === 'arrowright' || k === 'd') keys.right = true;
       if (k === ' ' || k === 'arrowup' || k === 'w') jumpDown();
+      if (k === 'f') fireShot();
 
       if (k === 'p' || k === 'escape') togglePause();
       if (k === 'r') restartGame();
@@ -1064,6 +1139,7 @@
       () => { keys.right = false; });
 
     bindHold(document.getElementById('btnJump'), jumpDown, jumpUp);
+    document.getElementById('btnShoot')?.addEventListener('pointerdown',e=>{e.preventDefault();fireShot();});
 
     document.getElementById('btnStart').addEventListener('click', () => { Sound.unlock(); startGame(); });
     document.getElementById('btnRetry').addEventListener('click', startGame);
@@ -1094,5 +1170,7 @@
     showScreen('screen-start');
     updateHUD(true);
     requestAnimationFrame(loop);
+
+    window.SaltoGame={start:startGame,getState:()=>({x:player.x,y:player.y,facing:player.facing,level:State.level,lives:State.lives,score:State.score,coins:State.coins,bullets:State.bullets,mode:State.mode,avatar:window.SaltoOnline?.profile?.avatar||'avatar_blue',word:world?.word,wordProgress:[...State.wordProgress]}),setRemote:p=>{remotePlayer=p;},setLives:n=>{State.lives=clamp(Number(n)||0,0,5);updateHUD(true);},reviveWithPartner,addLife:()=>{State.lives=Math.min(5,State.lives+1);updateHUD(true);},applySharedEvent,confirmSharedEvent,rejectSharedEvent,applyLevel:level=>{if(level>=0&&level<LEVEL_COUNT&&State.level!==level){loadLevel(level);State.mode='playing';showScreen(null);showBanner('NIVEL '+(level+1));}},shoot:fireShot,openScreen:showScreen};
 
   })();

@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.saltoestelar.mobile">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <application android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:label="Salto Estelar" android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher" android:allowBackup="true" android:supportsRtl="true">

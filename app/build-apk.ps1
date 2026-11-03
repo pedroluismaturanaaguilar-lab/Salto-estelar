@@ -31,7 +31,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Falló la compilación del icono Android.' }
 $flat = Join-Path $intermediate 'drawable_ic_launcher.xml.flat'
 & $aapt2 link -o (Join-Path $intermediate 'unsigned.apk') -I $androidJar `
   --manifest (Join-Path $moduleRoot 'src\main\AndroidManifest.xml') `
-  --java (Join-Path $intermediate 'generated') --min-sdk-version 33 --target-sdk-version 35 `
+  --java (Join-Path $intermediate 'generated') --min-sdk-version 33 --target-sdk-version 36 `
   --version-code 1 --version-name 1.0 -R $flat `
   -A (Join-Path $moduleRoot 'src\main\assets')
 if ($LASTEXITCODE -ne 0) { throw 'Falló el empaquetado de recursos Android.' }

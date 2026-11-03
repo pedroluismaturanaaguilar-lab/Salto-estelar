@@ -1,31 +1,24 @@
 SALTO ESTELAR - APP ANDROID
 ==========================
 
-El APK versión 1.1 ya compilado para Android 13 (API 33) o posterior está en:
-app/app/build/outputs/apk/debug/app-debug.apk
+El código fuente de la aplicación está en esta carpeta. Requiere Android Studio,
+Android SDK Platform 36 y un teléfono Android 13 (API 33) o posterior.
 
-INSTALARLO SIN PLAY STORE
+La aplicación abre primero https://salto-estelar.onrender.com/ para acceder a
+cuentas, progreso compartido, salas online y videollamadas. Si no hay conexión,
+carga la copia local incluida para jugar individualmente. La cámara y el
+micrófono se solicitan solo cuando se activan las llamadas.
 
-1. Envía app-debug.apk al teléfono. En WhatsApp intenta adjuntarlo como
-   Documento (clip > Documento).
-2. Si WhatsApp no permite enviarlo, comprime el archivo en ZIP o pásalo por USB,
-   Drive o Bluetooth. Si usas ZIP, el teléfono debe extraer app-debug.apk antes.
-3. En el teléfono, abre el APK descargado.
-4. Android puede pedir permiso para instalar apps desconocidas desde WhatsApp,
-   Chrome o Files. Permítelo para esa aplicación y vuelve a abrir el APK.
-5. Pulsa Instalar. Salto Estelar aparecerá como aplicación en el teléfono.
+COMPILAR EL APK
 
-El APK incluye su propia copia del juego y funciona sin Render ni conexión a
-Internet. El progreso y las monedas se quedan en ese teléfono. La web y la app
-son versiones separadas; los cambios que hagas a la web no se incorporan solos
-a una app ya compilada.
+1. Abre la carpeta app en Android Studio.
+2. Espera a que Gradle sincronice el proyecto.
+3. Selecciona Build > Build Bundle(s) / APK(s) > Build APK(s).
+4. Android Studio mostrará la ruta del APK generado.
 
-RECOMPILAR DESPUÉS DE CAMBIAR EL JUEGO
+También puedes usar el script de PowerShell `build-apk.ps1` desde esta carpeta
+si Gradle y Android SDK están configurados en el equipo.
 
-Abre PowerShell, ejecuta:
-
-  cd "C:\Users\pedro luis\Desktop\salto extelar\app"
-  powershell -ExecutionPolicy Bypass -File .\build-apk.ps1
-
-El APK nuevo reemplazará el archivo de la ruta indicada arriba. El proyecto está configurado para Android 13 o superior.
-
+La base de datos en Render debe estar conectada y activa para crear cuentas.
+La cámara y el micrófono dependen de HTTPS, permisos Android y de que la red
+permita WebRTC. Consulta el README del proyecto para los límites del plan gratuito.
