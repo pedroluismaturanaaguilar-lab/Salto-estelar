@@ -29,7 +29,7 @@ test('API de cuenta, recompensas persistentes y sala WebSocket cooperativa', asy
   t.after(async()=>{await stop();await fs.rm(dir,{recursive:true,force:true});});
   await start();
 
-  const page=await fetch(base+'/');assert.equal(page.status,200);const html=await page.text();assert.match(html,/screen-online/);assert.match(html,/screen-shop/);assert.match(html,/screen-targets/);
+  const page=await fetch(base+'/');assert.equal(page.status,200);const html=await page.text();assert.match(html,/screen-online/);assert.match(html,/screen-shop/);assert.doesNotMatch(html,/screen-targets|Tiro al blanco/);assert.match(html,/btnShoot/);
   assert.equal((await fetch(base+'/server.js')).status,404,'private server source must not be served as a static asset');
 
   const a=await post('/register',{username:'JugadoraUno',password:'segura12345'});
@@ -58,3 +58,4 @@ test('API de cuenta, recompensas persistentes y sala WebSocket cooperativa', asy
   const login=await post('/login',{username:'JugadoraUno',password:'segura12345'});assert.equal(login.status,200);
   const me=await fetch(base+'/api/me',{headers:{authorization:'Bearer '+accountA.token}});const profile=await me.json();assert.equal(profile.user.profile.coins,1);
 });
+
