@@ -127,7 +127,7 @@
     const State = {
       mode: 'menu',
       level: 0,
-      lives: 3,
+      lives: 5,
       score: 0,
       coins: 0,
       bullets: 0,
@@ -135,7 +135,10 @@
       wordProgress: [],
       best: loadBest(),
       time: 0,
-      shake: 0
+      shake: 0,
+      shieldTime: 0,
+      magnetTime: 0,
+      collectedByLevel: {}
     };
 
     const cam = { x: 0, y: 0 };
@@ -153,20 +156,23 @@
     const keys = { left: false, right: false, jump: false };
 
     let world  = null;
+    let checkpointClock = 0;
     const particles = [];
     const texts     = [];
     const bullets = [];
+    const enemyBullets = [];
     let remotePlayer = null;
 
     /* ==========================================================
        5. GENERACIÓN DE NIVELES
        ========================================================== */
-    function spawnEnemy(x, surfaceY, minX, maxX, speed) {
-      const w = 34, h = 30;
+    function spawnEnemy(x, surfaceY, minX, maxX, speed, kind='slime') {
+      const w = kind==='bird'?38:34, h = kind==='bird'?30:30;
       return {
         x, y: surfaceY - h, w, h,
         minX, maxX, speed,
         dir: Math.floor(x + surfaceY) % 2 ? 1 : -1,
+        kind,baseY:surfaceY-h,shotTimer:1.2+Math.random()*1.4,
         alive: true,
         anim: Math.random() * Math.PI * 2
       };
@@ -174,7 +180,7 @@
 
     function generateLevel(index) {
       const rng  = mulberry32(1337 + index * 7919);
-      const diff = Math.min(index, 12);
+      const diff = Math.min(index, 20);
 
       const platforms = [];
       const coins     = [];
@@ -183,6 +189,9 @@
       const ammo      = [];
       const keys      = [];
       const chests    = [];
+      const hearts    = [];
+      const shields   = [];
+      const magnets   = [];
       const segments  = [];
 
       let x = 0;
@@ -222,7 +231,7 @@
           }
 
           if (rng() < 0.4 + diff * 0.1) {
-            enemies.push(spawnEnemy(px + 6, py, px + 4, px + pw - 4, 55 + diff * 18));
+            enemies.push(spawnEnemy(px + 6, py, px + 4, px + pw - 4, 55 + diff * 18,index%4===3?'runner':'slime'));
           }
         }
       }
@@ -233,7 +242,7 @@
         const nEnemies = (s.w > 300 ? 1 : 0) + (rng() < 0.25 + diff * 0.12 ? 1 : 0);
         for (let k = 0; k < nEnemies; k++) {
           const ex = s.x + 30 + rng() * (s.w - 100);
-          enemies.push(spawnEnemy(ex, GROUND_Y, s.x + 8, s.x + s.w - 8, 60 + diff * 20 + rng() * 30));
+          enemies.push(spawnEnemy(ex, GROUND_Y, s.x + 8, s.x + s.w - 8, 60 + diff * 20 + rng() * 30,index%4===1?'runner':'slime'));
         }
 
         if (rng() < 0.35 + diff * 0.1) {
@@ -269,9 +278,14 @@
 
       const last = segments[segments.length - 1];
       const goal = { x: last.x + last.w - 120, y: GROUND_Y - 130, w: 44, h: 130 };
+      if(index>=2&&index%3===0){const s=segments[2+((index/3|0)%(segments.length-3))];enemies.push(spawnEnemy(s.x+s.w*.55,GROUND_Y-125,s.x+30,s.x+s.w-30,70+diff*10,'bird'));}
+      if(index%4===2){const s=segments[2+((index/4|0)%(segments.length-3))];spikes.push({x:s.x+s.w*.52,y:GROUND_Y-22,w:52,h:22,moving:true,baseX:s.x+s.w*.52,range:Math.max(18,s.w*.2),speed:35+diff*5,phase:rng()*Math.PI*2});}
       enemies.forEach((enemy,i)=>enemy.id='l'+index+':enemy:'+i);
       const word = LEVEL_WORDS[index % LEVEL_WORDS.length];
       const letters = [...word].map((letter,i)=>{const s=segments[1+Math.min(segments.length-3,Math.floor((i+1)*(segments.length-2)/(word.length+1)))];return {id:'l'+index+':letter:'+i,letter,x:s.x+Math.max(45,Math.min(s.w-45,50+(s.w-100)*((i+1)/(word.length+1)))),y:GROUND_Y-78,r:14,taken:false};});
+      const heartCount=2+(index%2);for(let i=0;i<heartCount;i++){const s=segments[1+Math.floor((i+1)*(segments.length-2)/(heartCount+1))];hearts.push({id:'l'+index+':heart:'+i,x:s.x+s.w*(.3+.4*((i%2))),y:GROUND_Y-92-(i%2)*24,taken:false});}
+      if(index%2===0){const s=segments[1+((index+2)%Math.max(1,segments.length-2))];shields.push({id:'l'+index+':shield:0',x:s.x+s.w*.48,y:GROUND_Y-112,taken:false});}
+      if(index%3===1){const s=segments[1+((index+1)%Math.max(1,segments.length-2))];magnets.push({id:'l'+index+':magnet:0',x:s.x+s.w*.55,y:GROUND_Y-112,taken:false});}
       if (segments.length>2) {
         const ammoSeg=segments[1+(index%Math.max(1,segments.length-2))];
         if(index%2===0)ammo.push({id:'l'+index+':ammo:0',x:ammoSeg.x+Math.max(70,ammoSeg.w*.55),y:GROUND_Y-65,taken:false});
@@ -281,10 +295,11 @@
         chests.push({id:'l'+index+':chest:0',x:chestSeg.x+Math.max(90,chestSeg.w*.72),y:GROUND_Y-42,w:34,h:34,opened:false});
       }
       coins.forEach((item,i)=>item.id='l'+index+':coin:'+i);
+      ammo.forEach((item,i)=>item.id=item.id||'l'+index+':ammo:'+i);keys.forEach((item,i)=>item.id=item.id||'l'+index+':key:'+i);chests.forEach((item,i)=>item.id=item.id||'l'+index+':chest:'+i);
 
       return {
         width: worldWidth,
-        platforms, coins, enemies, spikes, segments, goal, letters, word, ammo, keys, chests,
+        platforms, coins, enemies, spikes, segments, goal, letters, word, ammo, keys, chests, hearts, shields, magnets, enemyBullets,
         spawn: { x: 60, y: GROUND_Y - player.h - 2 }
       };
     }
@@ -297,6 +312,9 @@
       State.level = index;
       State.wordProgress = new Array(world.word.length).fill('');
       bullets.length = 0;
+      enemyBullets.length = 0;
+      State.shieldTime = 0; State.magnetTime = 0;
+      applyCollectedForLevel();
 
       player.x = world.spawn.x;
       player.y = world.spawn.y;
@@ -317,22 +335,16 @@
 
     function startGame() {
       Sound.unlock();
-      State.lives = 3;
-      State.score = 0;
-      State.coins = 0;
-      State.bullets = 0;
-      State.keys = 0;
+      if(State.lives<=0){State.lives=5;loadLevel(State.level);}
       window.SaltoOnline?.startRun();
       keys.left = keys.right = keys.jump = false;
-
-      loadLevel(0);
       State.mode = 'playing';
       showScreen(null);
       showBanner('NIVEL 1');
       updateHUD(true);
     }
 
-    function restartGame() { startGame(); }
+    function restartGame() { saveCheckpoint();if(State.lives<=0)State.lives=5;loadLevel(State.level);State.mode='playing';showScreen(null);updateHUD(true);saveCheckpoint(); }
 
     function togglePause() {
       if (State.mode === 'playing') {
@@ -406,6 +418,7 @@
     function update(dt) {
       updatePlayer(dt);
       updateEnemies(dt);
+      updatePowerups(dt);
       checkCollisions();
       updateParticles(dt);
       updateTexts(dt);
@@ -447,6 +460,8 @@
 
       p.invuln = Math.max(0, p.invuln - dt);
 
+      if(State.shieldTime>0&&p.y+p.h>GROUND_Y){p.y=GROUND_Y-p.h;p.vy=0;p.onGround=true;}
+
       if (p.y > VIEW_H + 200) fellInPit();
     }
 
@@ -457,7 +472,16 @@
         e.x += e.dir * e.speed * dt;
         if (e.x < e.minX)       { e.x = e.minX; e.dir = 1; }
         if (e.x + e.w > e.maxX) { e.x = e.maxX - e.w; e.dir = -1; }
+        if(e.kind==='bird'){e.y=e.baseY+Math.sin(e.anim*1.7)*22;e.shotTimer-=dt;if(e.shotTimer<=0&&Math.abs(player.x-e.x)<620){world.enemyBullets.push({x:e.x+e.w/2,y:e.y+e.h*.65,vx:Math.sign(player.x-e.x)*230,vy:clamp((player.y-e.y)*.32,-110,150),life:3});e.shotTimer=1.5+Math.random()*1.3;}}
       }
+    }
+
+    function updatePowerups(dt){
+      State.shieldTime=Math.max(0,State.shieldTime-dt);State.magnetTime=Math.max(0,State.magnetTime-dt);
+      for(const s of world.spikes)if(s.moving)s.x=s.baseX+Math.sin(State.time*(s.speed/25)+s.phase)*s.range;
+      if(State.magnetTime>0){for(const item of [...world.coins,...world.letters,...world.keys]){if(item.taken)continue;const dx=player.x+player.w/2-item.x,dy=player.y+player.h/2-item.y,d=Math.hypot(dx,dy);if(d>0&&d<440){const step=Math.min(380*dt,d);item.x+=dx/d*step;item.y+=dy/d*step;}}}
+      for(let i=world.enemyBullets.length-1;i>=0;i--){const b=world.enemyBullets[i];b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;if(b.life<=0||b.x<cam.x-80||b.x>cam.x+VIEW_W+80){world.enemyBullets.splice(i,1);continue;}if(aabb(player,{x:b.x-6,y:b.y-6,w:12,h:12})){world.enemyBullets.splice(i,1);if(State.shieldTime<=0)damagePlayer();}}
+      checkpointClock+=dt;if(State.mode==='playing'&&checkpointClock>=3){checkpointClock=0;saveCheckpoint();}
     }
 
     function checkCollisions() {
@@ -467,35 +491,38 @@
         if (c.taken) continue;
         if (Math.abs(c.x - (p.x + p.w / 2)) < c.r + p.w / 2 &&
             Math.abs(c.y - (p.y + p.h / 2)) < c.r + p.h / 2) {
-          c.taken = true;
-          publishEvent('collect',c.id);
+          if(!collectOnce(c))continue;
           State.coins++;
           State.score += 10;
           Sound.coin();
           spawnParticles(c.x, c.y, '#ffd166', 9);
           addText(c.x, c.y - 8, '+10', '#ffd166');
           updateHUD();
-          if(window.SaltoOnline&&!window.SaltoOnline.active)window.SaltoOnline.reward(1,c.id);
+          if(window.SaltoOnline)window.SaltoOnline.reward(1,c.id);
         }
       }
 
       for (const item of world.letters) {
         if(item.taken)continue;
-        if(Math.abs(item.x-(p.x+p.w/2))<24&&Math.abs(item.y-(p.y+p.h/2))<34){item.taken=true;const idx=Number(item.id.split(':').pop());State.wordProgress[idx]=item.letter;publishEvent('letter',item.id);Sound.coin();addText(item.x,item.y-12,item.letter,'#8df3ff');updateHUD(true);}
+        if(Math.abs(item.x-(p.x+p.w/2))<24&&Math.abs(item.y-(p.y+p.h/2))<34){if(!collectOnce(item,'letter'))continue;const idx=Number(item.id.split(':').pop());State.wordProgress[idx]=item.letter;Sound.coin();addText(item.x,item.y-12,item.letter,'#8df3ff');updateHUD(true);}
       }
-      for (const item of world.ammo) if(!item.taken&&Math.abs(item.x-(p.x+p.w/2))<30&&Math.abs(item.y-(p.y+p.h/2))<34){item.taken=true;State.bullets+=20;publishEvent('collect',item.id);addText(item.x,item.y-12,'+20 balas','#fd86ef');Sound.coin();updateHUD(true);}
-      for (const item of world.keys) if(!item.taken&&Math.abs(item.x-(p.x+p.w/2))<28&&Math.abs(item.y-(p.y+p.h/2))<35){item.taken=true;State.keys++;publishEvent('collect',item.id);addText(item.x,item.y-12,'🔑','#ffe58a');spawnParticles(item.x,item.y,'#ffe58a',8);Sound.coin();updateHUD(true);}
+      for (const item of world.ammo) if(!item.taken&&Math.abs(item.x-(p.x+p.w/2))<30&&Math.abs(item.y-(p.y+p.h/2))<34){if(!collectOnce(item))continue;State.bullets+=20;addText(item.x,item.y-12,'+20 balas','#fd86ef');Sound.coin();updateHUD(true);}
+      for (const item of world.keys) if(!item.taken&&Math.abs(item.x-(p.x+p.w/2))<28&&Math.abs(item.y-(p.y+p.h/2))<35){if(!collectOnce(item))continue;State.keys++;addText(item.x,item.y-12,'🔑','#ffe58a');spawnParticles(item.x,item.y,'#ffe58a',8);Sound.coin();updateHUD(true);}
+      for(const item of world.hearts)if(!item.taken&&State.lives<5&&Math.abs(item.x-(p.x+p.w/2))<32&&Math.abs(item.y-(p.y+p.h/2))<36){if(!collectOnce(item))continue;State.lives=Math.min(5,State.lives+1);spawnParticles(item.x,item.y,'#f72585',10);addText(item.x,item.y-12,'+1 vida','#f72585');updateHUD(true);}
+      for(const item of world.shields)if(!item.taken&&Math.abs(item.x-(p.x+p.w/2))<32&&Math.abs(item.y-(p.y+p.h/2))<36){if(!collectOnce(item))continue;State.shieldTime=10;addText(item.x,item.y-12,'ESCUDO 10s','#4cc9f0');}
+      for(const item of world.magnets)if(!item.taken&&Math.abs(item.x-(p.x+p.w/2))<32&&Math.abs(item.y-(p.y+p.h/2))<36){if(!collectOnce(item))continue;State.magnetTime=10;addText(item.x,item.y-12,'IMÁN 10s','#ffd166');}
       for (const chest of world.chests) if(!chest.opened&&aabb(p,chest)){
-        if(State.keys>0){chest.opened=true;State.keys--;const reward=Math.floor((world.width+State.level*17)%3);publishEvent('chest',chest.id,{reward});if(!window.SaltoOnline?.active)grantChestReward(reward,chest);Sound.levelUp();spawnParticles(chest.x,chest.y,'#ffd166',16);updateHUD(true);}else addText(chest.x,chest.y-12,'Necesitas llave','#ffe58a');
+        if(State.keys>0){chest.opened=true;State.keys--;markCollected(chest.id);const reward=Math.floor((world.width+State.level*17)%3);publishEvent('chest',chest.id,{reward});grantChestReward(reward,chest);saveCheckpoint();Sound.levelUp();spawnParticles(chest.x,chest.y,'#ffd166',16);updateHUD(true);}else addText(chest.x,chest.y-12,'Necesitas llave','#ffe58a');
       }
 
       for (const s of world.spikes) {
         const hit = { x: s.x + 4, y: s.y + 6, w: s.w - 8, h: s.h - 6 };
-        if (aabb(p, hit) && p.invuln <= 0) { damagePlayer(); return; }
+        if (aabb(p, hit) && p.invuln <= 0 && State.shieldTime<=0) { damagePlayer(); return; }
       }
 
       for (const e of world.enemies) {
         if (!e.alive || !aabb(p, e)) continue;
+        if(State.shieldTime>0)continue;
 
         const stomping = p.vy > 0 && (p.y + p.h) - e.y < e.h * 0.75;
 
@@ -518,10 +545,16 @@
       if (aabb(p, world.goal)) reachGoal();
     }
 
-    function publishEvent(kind,id,extra={}){if(id&&window.SaltoOnline)window.SaltoOnline.gameEvent({kind,id,level:State.level,...extra});}
-    function grantChestReward(reward,chest){if(reward===0){State.coins+=10;if(window.SaltoOnline&&!window.SaltoOnline.active)window.SaltoOnline.reward(10,chest.id+':coins');addText(chest.x,chest.y-18,'+10 monedas','#ffd166');}else if(reward===1){State.bullets+=8;addText(chest.x,chest.y-18,'+8 balas','#fd86ef');}else{State.lives=Math.min(5,State.lives+1);addText(chest.x,chest.y-18,'+1 vida','#43e97b');}updateHUD(true);}
-    function applySharedEvent(event){if(!world||!event||event.level!==State.level)return;for(const group of [world.coins,world.letters,world.ammo,world.keys]){const item=group.find(x=>x.id===event.id);if(item){item.taken=true;if(group===world.letters){const idx=Number(item.id.split(':').pop());State.wordProgress[idx]=item.letter;updateHUD(true);}return;}}const chest=world.chests.find(x=>x.id===event.id);if(chest){chest.opened=true;return;}const enemy=world.enemies.find(x=>x.id===event.id);if(enemy)enemy.alive=false;}
-    function confirmSharedEvent(event){if(!world||event.level!==State.level)return;const chest=world.chests.find(x=>x.id===event.id);if(chest)grantChestReward(event.reward,chest);}
+    function publishEvent(kind,id,extra={}){if(!id)return;if(['collect','letter','chest','enemy'].includes(kind)){markCollected(id);setTimeout(saveCheckpoint,0);}if(window.SaltoOnline)window.SaltoOnline.gameEvent({kind,id,level:State.level,...extra});}
+    function markCollected(id){if(!id)return;const level=Number(String(id).match(/^l(\d+):/)?.[1]);if(!Number.isFinite(level))return;const list=State.collectedByLevel[level]||(State.collectedByLevel[level]=[]);if(!list.includes(id))list.push(id);}
+    function applyCollectedForLevel(){const saved=State.collectedByLevel[State.level];const found=new Set(Array.isArray(saved)?saved:[]);for(const group of [world.coins,world.letters,world.ammo,world.keys,world.hearts,world.shields,world.magnets])for(const item of group)if(found.has(item.id))item.taken=true;for(const item of world.chests)if(found.has(item.id))item.opened=true;for(const item of world.enemies)if(found.has(item.id))item.alive=false;}
+    function checkpointPayload(){return {level:State.level,x:player.x,y:player.y,lives:State.lives,coins:State.coins,score:State.score,bullets:State.bullets,keys:State.keys,shieldTime:State.shieldTime,magnetTime:State.magnetTime,wordProgress:State.wordProgress.join(''),collected:State.collectedByLevel};}
+    function saveCheckpoint(immediate=false){const cp=checkpointPayload();if(window.SaltoOnline?.saveCheckpoint)return window.SaltoOnline.saveCheckpoint(cp,immediate);try{localStorage.setItem('saltoEstelar.guestCheckpoint',JSON.stringify(cp));}catch{}return Promise.resolve();}
+    function restoreCheckpoint(cp){if(!cp||typeof cp!=='object')return;State.collectedByLevel=cp.collected&&typeof cp.collected==='object'?cp.collected:{};const level=clamp(Number(cp.level)||0,0,LEVEL_COUNT-1);loadLevel(level);State.lives=clamp(Number(cp.lives??5),0,5);State.coins=Math.max(0,Number(cp.coins)||0);State.score=Math.max(0,Number(cp.score)||0);State.bullets=Math.max(0,Number(cp.bullets)||0);State.keys=Math.max(0,Number(cp.keys)||0);State.shieldTime=clamp(Number(cp.shieldTime)||0,0,10);State.magnetTime=clamp(Number(cp.magnetTime)||0,0,10);State.wordProgress=[...world.word].map((_,i)=>String(cp.wordProgress||'')[i]||'');player.x=clamp(Number(cp.x)||world.spawn.x,world.spawn.x,world.width-player.w);player.y=clamp(Number(cp.y)||world.spawn.y,-100,GROUND_Y-player.h);if(State.lives<=0){State.lives=5;player.x=world.spawn.x;player.y=world.spawn.y;}State.mode='menu';const startButton=document.getElementById('btnStart');if(startButton)startButton.textContent='▶ Continuar nivel '+(level+1);updateHUD(true);}
+    function collectOnce(item,kind='collect'){if(item.taken)return false;item.taken=true;markCollected(item.id);publishEvent(kind,item.id);saveCheckpoint();return true;}
+    function grantChestReward(reward,chest){if(reward===0){State.coins+=10;if(window.SaltoOnline)window.SaltoOnline.reward(10,chest.id+':coins');addText(chest.x,chest.y-18,'+10 monedas','#ffd166');}else if(reward===1){State.bullets+=8;addText(chest.x,chest.y-18,'+8 balas','#fd86ef');}else{State.lives=Math.min(5,State.lives+1);addText(chest.x,chest.y-18,'+1 vida','#43e97b');}updateHUD(true);}
+    function applySharedEvent(event){if(!world||!event||event.level!==State.level)return;markCollected(event.id);for(const group of [world.coins,world.letters,world.ammo,world.keys,world.hearts,world.shields,world.magnets]){const item=group.find(x=>x.id===event.id);if(item){if(item.taken)return;item.taken=true;if(group===world.coins){State.coins++;State.score+=10;}else if(group===world.letters){const idx=Number(item.id.split(':').pop());State.wordProgress[idx]=item.letter;}else if(group===world.ammo)State.bullets+=20;else if(group===world.keys)State.keys++;else if(group===world.hearts)State.lives=Math.min(5,State.lives+1);else if(group===world.shields)State.shieldTime=10;else if(group===world.magnets)State.magnetTime=10;saveCheckpoint();updateHUD(true);return;}}const chest=world.chests.find(x=>x.id===event.id);if(chest){if(chest.opened)return;chest.opened=true;if(window.SaltoOnline?.active)grantChestReward(event.reward,chest);saveCheckpoint();return;}const enemy=world.enemies.find(x=>x.id===event.id);if(enemy&&enemy.alive){enemy.alive=false;State.score+=Number(event.points)||25;saveCheckpoint();updateHUD(true);}}
+    function confirmSharedEvent(event){if(!world||event.level!==State.level)return;const chest=world.chests.find(x=>x.id===event.id);if(chest&&!chest.opened)grantChestReward(event.reward,chest);}
     function rejectSharedEvent(event){if(!world)return;const data=typeof event==='string'?{id:event}:event,id=data.id;const c=world.coins.find(x=>x.id===id);if(c){c.taken=false;State.coins=Math.max(0,State.coins-1);State.score=Math.max(0,State.score-10);}const a=world.ammo.find(x=>x.id===id);if(a){a.taken=false;State.bullets=Math.max(0,State.bullets-20);}const k=world.keys.find(x=>x.id===id);if(k){k.taken=false;State.keys=Math.max(0,State.keys-1);}const l=world.letters.find(x=>x.id===id);if(l){l.taken=false;State.wordProgress[Number(id.split(':').pop())]='';}const chest=world.chests.find(x=>x.id===id);if(chest){chest.opened=false;State.keys++;}const enemy=world.enemies.find(x=>x.id===id);if(enemy){enemy.alive=true;State.score=Math.max(0,State.score-(Number(data.points)||0));}updateHUD(true);}
 
     function fireShot(){if(State.mode!=='playing'||State.bullets<=0)return;State.bullets--;bullets.push({x:player.x+player.w/2+player.facing*20,y:player.y+20,vx:player.facing*620,life:1.1});Sound.stomp();updateHUD(true);}
@@ -531,6 +564,7 @@
        ========================================================== */
     function damagePlayer() {
       if (State.mode !== 'playing' || player.invuln > 0) return;
+      if(State.shieldTime>0)return;
 
       State.lives--;
       State.shake = 0.5;
@@ -541,9 +575,11 @@
 
       if (State.lives <= 0) handleNoLives();
       else respawnPlayer();
+      saveCheckpoint();
     }
 
     function fellInPit() {
+      if(State.shieldTime>0){player.y=GROUND_Y-player.h;player.vy=0;player.onGround=true;return;}
       State.lives--;
       State.shake = 0.5;
       Sound.hurt();
@@ -551,6 +587,7 @@
 
       if (State.lives <= 0) handleNoLives();
       else respawnPlayer();
+      saveCheckpoint();
     }
 
     function respawnPlayer() {
@@ -576,7 +613,7 @@
     }
 
     function handleNoLives(){if(window.SaltoOnline?.active&&window.SaltoOnline.requestRevive()){State.mode='waiting';showBanner('TU COMPAÑERO TE AYUDA');return;}gameOver();}
-    function reviveWithPartner(){State.lives=1;respawnPlayer();State.mode='playing';showScreen(null);showBanner('¡REVIVISTE EN EQUIPO!');updateHUD(true);}
+    function reviveWithPartner(){State.lives=1;respawnPlayer();State.mode='playing';showScreen(null);showBanner('¡REVIVISTE EN EQUIPO!');updateHUD(true);saveCheckpoint();}
 
     function reachGoal() {
       if (State.mode !== 'playing') return;
@@ -587,10 +624,13 @@
       Sound.levelUp();
       spawnParticles(world.goal.x + 20, world.goal.y + 30, '#43e97b', 22);
 
+      const completedLevel=State.level+1;
       State.level++;
+      State.lives=5;State.shieldTime=0;State.magnetTime=0;
       if(window.SaltoOnline?.active)window.SaltoOnline.levelChanged(State.level);
-      if(window.SaltoOnline)window.SaltoOnline.matchProgress({level:State.level,score:State.score,coins:State.coins,completed:true,distance:player.x});
+      if(window.SaltoOnline)window.SaltoOnline.matchProgress({level:completedLevel,score:State.score,coins:State.coins,completed:true,distance:player.x});
       if (State.level >= LEVEL_COUNT) {
+        saveCheckpoint(true);
         victory();
         return;
       }
@@ -600,6 +640,7 @@
       showScreen(null);
       showBanner('NIVEL ' + (State.level + 1));
       updateHUD(true);
+      saveCheckpoint(true);
     }
 
     /* ==========================================================
@@ -693,13 +734,15 @@
       });
     }
 
+    const BIOME_THEMES=[['#080d26','#182a63','#2f4bb0'],['#073332','#14735d','#59c58d'],['#21103d','#613384','#be6ac4'],['#301522','#85433e','#e5a04c'],['#07273c','#176b9b','#9bdcf0'],['#25213c','#50518a','#df85ad'],['#181c22','#4a5964','#c5d9dd'],['#2b1d08','#76601b','#edcf55'],['#122440','#294e9c','#54b8d3'],['#25142d','#803750','#ed8c77']];
     function drawBackground() {
       const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
       const bg=window.SaltoOnline?.profile?.background;
+      const theme=BIOME_THEMES[Math.floor(State.level/10)%BIOME_THEMES.length];
       if(bg==='bg_ice'){g.addColorStop(0,'#092b50');g.addColorStop(.5,'#17638a');g.addColorStop(1,'#afebf7');}
       else if(bg==='bg_halloween'){g.addColorStop(0,'#210a3b');g.addColorStop(.5,'#542064');g.addColorStop(1,'#c04b27');}
       else if(bg==='bg_space'){g.addColorStop(0,'#080a25');g.addColorStop(.5,'#17235b');g.addColorStop(1,'#462d7c');}
-      else {g.addColorStop(0,'#080d26');g.addColorStop(.5,'#182a63');g.addColorStop(1,'#2f4bb0');}
+      else {g.addColorStop(0,theme[0]);g.addColorStop(.5,theme[1]);g.addColorStop(1,theme[2]);}
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
@@ -714,8 +757,8 @@
       }
       ctx.globalAlpha = 1;
 
-      drawHills(cam.x * 0.15, '#101a44', 400, 42, 0.006);
-      drawHills(cam.x * 0.30, '#16225c', 452, 30, 0.010);
+      drawHills(cam.x * 0.15, theme[1], 400, 42, 0.006);
+      drawHills(cam.x * 0.30, theme[2], 452, 30, 0.010);
     }
 
     function drawHills(off, color, baseY, amp, wave) {
@@ -748,8 +791,12 @@
       for(const l of world.letters)if(!l.taken&&l.x>cam.x-30&&l.x<cam.x+VIEW_W+30){ctx.save();ctx.fillStyle='#8df3ff';ctx.shadowColor='#4cc9f0';ctx.shadowBlur=14;ctx.font='bold 18px system-ui';ctx.textAlign='center';ctx.fillText(l.letter,l.x,l.y);ctx.restore();}
       for(const a of world.ammo)if(!a.taken){ctx.font='20px system-ui';ctx.fillText('🍓',a.x-10,a.y+7);}
       for(const k of world.keys)if(!k.taken){ctx.font='19px system-ui';ctx.fillText('🔑',k.x-10,k.y+7);}
+      for(const h of world.hearts)if(!h.taken){ctx.font='23px system-ui';ctx.fillText('💖',h.x-12,h.y+8);}
+      for(const s of world.shields)if(!s.taken){ctx.font='22px system-ui';ctx.fillText('🛡️',s.x-12,s.y+8);}
+      for(const m of world.magnets)if(!m.taken){ctx.font='22px system-ui';ctx.fillText('🧲',m.x-12,m.y+8);}
       for(const c of world.chests)drawChest(c);
       for(const b of bullets){ctx.fillStyle='#fd86ef';ctx.shadowColor='#fd86ef';ctx.shadowBlur=8;ctx.beginPath();ctx.arc(b.x,b.y,5,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
+      for(const b of world.enemyBullets){ctx.fillStyle='#ff794d';ctx.shadowColor='#ff794d';ctx.shadowBlur=8;ctx.beginPath();ctx.arc(b.x,b.y,6,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
 
       for (const e of world.enemies) {
         if (e.alive && inView(e)) drawEnemy(e);
@@ -841,6 +888,7 @@
     function drawEnemy(e) {
       const bob = Math.sin(e.anim) * 2;
       const x = e.x, y = e.y + bob, w = e.w, h = e.h;
+      if(e.kind==='bird'){ctx.save();ctx.font='30px system-ui';ctx.textAlign='center';ctx.fillText('🐦',x+w/2,y+h);ctx.restore();return;}
 
       ctx.save();
       ctx.globalAlpha = 0.22;
@@ -851,8 +899,8 @@
       ctx.restore();
 
       const g = ctx.createLinearGradient(x, y, x, y + h);
-      g.addColorStop(0, '#ff7b54');
-      g.addColorStop(1, '#c9184a');
+      g.addColorStop(0, e.kind==='runner'?'#8df3ff':'#ff7b54');
+      g.addColorStop(1, e.kind==='runner'?'#2b7fd4':'#c9184a');
       ctx.fillStyle = g;
       roundRect(x, y, w, h, 10);
       ctx.fill();
@@ -948,6 +996,8 @@
       roundRect(x, y, w, h, 12);
       ctx.fill();
       ctx.restore();
+      if(State.shieldTime>0||State.magnetTime>0){ctx.save();ctx.globalAlpha=.55+.2*Math.sin(State.time*10);ctx.strokeStyle=State.shieldTime>0?'#4cc9f0':'#ffd166';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(cx,bottom-h/2,w*.8,h*.72,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
+      const username=window.SaltoOnline?.profile?.username;if(username){ctx.save();ctx.font='bold 11px system-ui';ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='rgba(4,8,25,.8)';ctx.fillStyle='#fff';ctx.strokeText(username,cx,y-8);ctx.fillText(username,cx,y-8);ctx.restore();}
       const accessory=window.SaltoOnline?.profile?.accessory;
       if(accessory==='hat_crown'){ctx.fillStyle='#ffd166';ctx.beginPath();ctx.moveTo(x+4,y+5);ctx.lineTo(x+9,y-5);ctx.lineTo(x+16,y+2);ctx.lineTo(x+23,y-5);ctx.lineTo(x+30,y+5);ctx.closePath();ctx.fill();}
       else if(accessory==='hat_astronaut'){ctx.strokeStyle='#d9f4ff';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(cx,y+2,14,7,0,Math.PI,Math.PI*2);ctx.stroke();}
@@ -1050,18 +1100,18 @@
     let hudCache = '';
 
     function updateHUD(force) {
-      const sig = [State.level, State.lives, State.coins, State.score, State.best,State.bullets,State.keys,State.wordProgress.join('')].join('|');
+      const sig = [State.level, State.lives, State.coins, State.score, State.best,State.bullets,State.keys,State.wordProgress.join(''),Math.ceil(State.shieldTime),Math.ceil(State.magnetTime)].join('|');
       if (!force && sig === hudCache) return;
       hudCache = sig;
 
       el.hudLevel.textContent = (State.level + 1) + '/' + LEVEL_COUNT;
       el.hudLives.textContent = '❤'.repeat(Math.max(0, State.lives)) +
-                                '♡'.repeat(Math.max(0, 3 - State.lives));
+                                '♡'.repeat(Math.max(0, 5 - State.lives));
       el.hudCoins.textContent = State.coins;
       el.hudScore.textContent = State.score;
       el.hudBest.textContent  = State.best;
       const ammoNode=document.getElementById('hudAmmo');if(ammoNode)ammoNode.textContent=State.bullets+' / '+State.keys;
-      const wordNode=document.getElementById('wordProgress');if(wordNode&&world)wordNode.textContent='Palabra: '+world.word.split('').map((ch,i)=>State.wordProgress[i]||'＿').join(' ');
+      const wordNode=document.getElementById('wordProgress');if(wordNode&&world){const effects=[State.shieldTime>0?'🛡️ '+Math.ceil(State.shieldTime)+'s':'',State.magnetTime>0?'🧲 '+Math.ceil(State.magnetTime)+'s':''].filter(Boolean).join(' · ');wordNode.textContent='Palabra: '+world.word.split('').map((ch,i)=>State.wordProgress[i]||'＿').join(' ')+(effects?' · '+effects:'');}
     }
 
     function showScreen(id) {
@@ -1150,6 +1200,7 @@
     document.getElementById('btnResume').addEventListener('click', togglePause);
     document.getElementById('btnRestart').addEventListener('click', restartGame);
     document.getElementById('btnPause').addEventListener('click', togglePause);
+    document.getElementById('btnHome')?.addEventListener('click',async()=>{await saveCheckpoint(true);State.mode='menu';keys.left=keys.right=keys.jump=false;showScreen('screen-start');});
 
     function toggleSound() {
       const on = Sound.toggle();
@@ -1173,7 +1224,10 @@
     updateHUD(true);
     requestAnimationFrame(loop);
 
-    window.SaltoGame={start:startGame,getState:()=>({x:player.x,y:player.y,facing:player.facing,level:State.level,lives:State.lives,score:State.score,coins:State.coins,bullets:State.bullets,mode:State.mode,avatar:window.SaltoOnline?.profile?.avatar||'avatar_blue',word:world?.word,wordProgress:[...State.wordProgress]}),setRemote:p=>{remotePlayer=p;},setLives:n=>{State.lives=clamp(Number(n)||0,0,5);updateHUD(true);},reviveWithPartner,addLife:()=>{State.lives=Math.min(5,State.lives+1);updateHUD(true);},applySharedEvent,confirmSharedEvent,rejectSharedEvent,applyLevel:level=>{if(level>=0&&level<LEVEL_COUNT&&State.level!==level){loadLevel(level);State.mode='playing';showScreen(null);showBanner('NIVEL '+(level+1));}},shoot:fireShot,openScreen:showScreen};
+    const guestCheckpoint=(()=>{try{return JSON.parse(localStorage.getItem('saltoEstelar.guestCheckpoint')||'null')||JSON.parse(localStorage.getItem('saltoEstelar.localProfile')||'{}').checkpoint||null;}catch{return null;}})();
+    if(guestCheckpoint)restoreCheckpoint(guestCheckpoint);
+    window.addEventListener('pagehide',()=>saveCheckpoint(true));
+    window.SaltoGame={start:startGame,getState:()=>({x:player.x,y:player.y,facing:player.facing,level:State.level,lives:State.lives,score:State.score,coins:State.coins,bullets:State.bullets,keys:State.keys,mode:State.mode,avatar:window.SaltoOnline?.profile?.avatar||'avatar_blue',word:world?.word,wordProgress:[...State.wordProgress]}),getCheckpoint:checkpointPayload,restoreCheckpoint,setRemote:p=>{remotePlayer=p;},setLives:n=>{State.lives=clamp(Number(n)||0,0,5);updateHUD(true);saveCheckpoint();},reviveWithPartner,addLife:()=>{State.lives=Math.min(5,State.lives+1);updateHUD(true);saveCheckpoint();},applySharedEvent,confirmSharedEvent,rejectSharedEvent,applyLevel:level=>{if(level>=0&&level<LEVEL_COUNT&&State.level!==level){loadLevel(level);State.lives=5;State.mode='playing';showScreen(null);showBanner('NIVEL '+(level+1));saveCheckpoint();}},shoot:fireShot,openScreen:showScreen};
 
   })();
 
