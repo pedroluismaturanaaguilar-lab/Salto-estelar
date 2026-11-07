@@ -26,7 +26,7 @@
 
       <div class="hud">
         <div class="chip chip-level"><span class="lbl">Nivel</span><b id="hudLevel">1/100</b></div>
-        <div class="chip chip-lives"><span class="lbl">Vidas</span><b id="hudLives">❤❤❤</b></div>
+        <div class="chip chip-lives"><span class="lbl">Vidas</span><b id="hudLives">❤❤❤❤❤</b></div>
         <div class="chip chip-coins"><span class="lbl">Monedas</span><b id="hudCoins">0</b></div>
         <div class="chip chip-score"><span class="lbl">Puntos</span><b id="hudScore">0</b></div>
         <div class="chip chip-best"><span class="lbl">Récord</span><b id="hudBest">0</b></div>
@@ -34,6 +34,7 @@
       </div>
 
       <div class="actions">
+        <button id="btnHome" class="icon-btn" title="Guardar y volver al inicio">⌂</button>
         <button id="btnPause" class="icon-btn" title="Pausa (P)">⏸</button>
         <button id="btnRestart" class="icon-btn" title="Reiniciar (R)">⟲</button>
         <button id="btnSound" class="icon-btn" title="Sonido (M)">🔊</button>
@@ -97,7 +98,7 @@
         <p id="accountStatus" class="subtitle">Entra para guardar tus monedas y progreso en todos tus dispositivos.</p>
         <div id="authForms" class="form-stack">
           <label>Nombre de usuario<input id="authUsername" maxlength="20" autocomplete="username" placeholder="Tu nombre"></label>
-          <label>Contraseña<input id="authPassword" type="password" minlength="8" autocomplete="current-password" placeholder="Mínimo 8 caracteres"></label>
+          <label>Contraseña<input id="authPassword" type="password" minlength="4" autocomplete="current-password" placeholder="Mínimo 4 caracteres"></label>
           <div class="start-actions"><button id="btnLogin" class="btn btn-primary">Iniciar sesión</button><button id="btnRegister" class="btn btn-ghost">Crear cuenta</button></div>
         </div>
         <div id="profileDetails" class="profile-grid" hidden></div>
