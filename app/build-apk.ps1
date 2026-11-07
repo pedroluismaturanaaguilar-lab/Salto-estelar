@@ -32,7 +32,7 @@ $flat = Join-Path $intermediate 'drawable_ic_launcher.xml.flat'
 & $aapt2 link -o (Join-Path $intermediate 'unsigned.apk') -I $androidJar `
   --manifest (Join-Path $moduleRoot 'src\main\AndroidManifest.xml') `
   --java (Join-Path $intermediate 'generated') --min-sdk-version 33 --target-sdk-version 36 `
-  --version-code 1 --version-name 1.0 -R $flat `
+  --version-code 2 --version-name 1.1 -R $flat `
   -A (Join-Path $moduleRoot 'src\main\assets')
 if ($LASTEXITCODE -ne 0) { throw 'Falló el empaquetado de recursos Android.' }
 
@@ -71,12 +71,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Falló la alineación del APK.' }
 $keystore = Join-Path $env:USERPROFILE '.android\debug.keystore'
 if (-not (Test-Path $keystore)) { throw 'Android Studio aún no creó la llave debug.keystore. Abre Android Studio una vez y vuelve a ejecutar este script.' }
 $outputApk = Join-Path $apkOut 'app-debug.apk'
-& $apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks $keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out $outputApk $alignedApk
-if ($LASTEXITCODE -ne 0) { throw 'Falló la firma del APK.' }
-& $apksigner sign --min-sdk-version 23 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks $keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out $outputApk $alignedApk
+& $apksigner sign --min-sdk-version 33 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks $keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out $outputApk $alignedApk
 if ($LASTEXITCODE -ne 0) { throw 'Falló la firma del APK.' }
 & $apksigner verify --verbose $outputApk
 if ($LASTEXITCODE -ne 0) { throw 'La verificación de firma del APK falló.' }
 $shareApk = Join-Path $projectRoot 'SaltoEstelar-Android13+.apk'
 Copy-Item $outputApk $shareApk -Force
 Write-Host "APK listo: $shareApk"
+
