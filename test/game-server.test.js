@@ -32,22 +32,29 @@ test('API de cuenta, recompensas persistentes y sala WebSocket cooperativa', asy
   const page=await fetch(base+'/');assert.equal(page.status,200);const html=await page.text();assert.match(html,/screen-online/);assert.match(html,/screen-shop/);assert.doesNotMatch(html,/screen-targets|Tiro al blanco/);assert.match(html,/btnShoot/);
   assert.equal((await fetch(base+'/server.js')).status,404,'private server source must not be served as a static asset');
 
-  const a=await post('/register',{username:'JugadoraUno',password:'segura12345'});
-  assert.equal(a.status,201);const accountA=await a.json();
+  const short=await post('/register',{username:'CuentaCorta',password:'abc'});assert.equal(short.status,400,'registration must reject passwords shorter than four characters');
+  const a=await post('/register',{username:'JugadoraUno',password:'abcd'});
+  assert.equal(a.status,201);const accountA=await a.json();assert.equal(accountA.user.profile.checkpoint.lives,5);
   const b=await post('/register',{username:'JugadoraDos',password:'segura67890'});
   assert.equal(b.status,201);const accountB=await b.json();
+  const checkpoint=await fetch(base+'/api/checkpoint',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+accountA.token},body:JSON.stringify({checkpoint:{level:14,x:1350,y:260,lives:3,coins:20,score:725,bullets:10,keys:2,wordProgress:'SAL',shieldTime:6,magnetTime:0,collected:{14:['l14:coin:1','l14:key:0']}}})});
+  assert.equal(checkpoint.status,200);const savedCheckpoint=(await checkpoint.json()).profile.checkpoint;assert.equal(savedCheckpoint.level,14);assert.equal(savedCheckpoint.lives,3);assert.deepEqual(savedCheckpoint.collected[14],['l14:coin:1','l14:key:0']);
   const catalog=await (await fetch(base+'/api/catalog')).json();
   assert.equal(catalog.words.length,100);assert.equal(new Set(catalog.words).size,100);
 
   let reward=await (await post('/reward',{rewardId:'l0:coin:1',amount:1},accountA.token)).json();assert.equal(reward.profile.coins,1);
   reward=await (await post('/reward',{rewardId:'l0:coin:1',amount:1},accountA.token)).json();assert.equal(reward.profile.coins,1,'duplicate reward should not be credited');
+  for(let i=1;i<=4;i++)await post('/reward',{rewardId:'test-wallet-'+i,amount:100},accountA.token);
+  const avatarPurchase=await post('/purchase',{itemId:'avatar_rose'},accountA.token);assert.equal(avatarPurchase.status,200);
+  const backgroundPurchase=await post('/purchase',{itemId:'bg_ice'},accountA.token);assert.equal(backgroundPurchase.status,200);
+  const equipped=await post('/cosmetics',{itemId:'bg_ice'},accountA.token);assert.equal((await equipped.json()).profile.background,'bg_ice');
 
   const first=await openSocket(accountA.token),second=await openSocket(accountB.token);
   t.after(()=>{first.close();second.close();});
-  first.send(JSON.stringify({type:'create-room'}));const created=await nextMessage(first,m=>m.type==='room-created');
-  second.send(JSON.stringify({type:'join',code:created.code}));await nextMessage(second,m=>m.type==='joined');await nextMessage(first,m=>m.type==='peer-joined');
+  first.send(JSON.stringify({type:'create-room',level:14}));const created=await nextMessage(first,m=>m.type==='room-created');
+  second.send(JSON.stringify({type:'join',code:created.code}));await nextMessage(second,m=>m.type==='joined');const initialLevel=await nextMessage(second,m=>m.type==='level');assert.equal(initialLevel.level,14);await nextMessage(first,m=>m.type==='peer-joined');
   second.send(JSON.stringify({type:'state',state:{x:340,y:390,level:0,facing:1}}));
-  const state=await nextMessage(first,m=>m.type==='state');assert.equal(state.state.x,340);
+  const state=await nextMessage(first,m=>m.type==='state');assert.equal(state.state.x,340);assert.equal(state.state.username,'JugadoraDos');
   first.send(JSON.stringify({type:'game-event',event:{id:'l0:coin:99',kind:'collect',level:0}}));
   const accepted=await nextMessage(first,m=>m.type==='game-event');assert.equal(accepted.playerId,accountA.user.id);
   second.send(JSON.stringify({type:'game-event',event:{id:'l0:coin:99',kind:'collect',level:0}}));
@@ -55,7 +62,8 @@ test('API de cuenta, recompensas persistentes y sala WebSocket cooperativa', asy
   first.send(JSON.stringify({type:'chat',text:'Hola'}));const chat=await nextMessage(second,m=>m.type==='chat');assert.equal(chat.text,'Hola');
 
   await stop();await start();
-  const login=await post('/login',{username:'JugadoraUno',password:'segura12345'});assert.equal(login.status,200);
-  const me=await fetch(base+'/api/me',{headers:{authorization:'Bearer '+accountA.token}});const profile=await me.json();assert.equal(profile.user.profile.coins,1);
+  const login=await post('/login',{username:'JugadoraUno',password:'abcd'});assert.equal(login.status,200);
+  const me=await fetch(base+'/api/me',{headers:{authorization:'Bearer '+accountA.token}});const profile=await me.json();assert.equal(profile.user.profile.coins,61);assert.equal(profile.user.profile.avatar,'avatar_rose');assert.equal(profile.user.profile.background,'bg_ice');assert.ok(profile.user.profile.inventory.owned.includes('bg_ice'));assert.equal(profile.user.profile.checkpoint.level,14);assert.equal(profile.user.profile.checkpoint.bullets,10);assert.deepEqual(profile.user.profile.checkpoint.collected[14],['l14:coin:1','l14:key:0']);
+  const meB=await fetch(base+'/api/me',{headers:{authorization:'Bearer '+accountB.token}});const profileB=await meB.json();assert.equal(profileB.user.profile.checkpoint.level,0);assert.equal(profileB.user.profile.coins,0,'each account has isolated progress and currency');
 });
 

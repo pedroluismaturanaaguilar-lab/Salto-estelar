@@ -25,3 +25,4 @@ document.addEventListener('DOMContentLoaded', () => {
     navigator.serviceWorker.register('/service-worker.js').catch(error => console.warn('No se pudo activar el modo instalable:', error));
   }
 });
+

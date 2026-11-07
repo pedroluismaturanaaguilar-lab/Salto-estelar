@@ -39,7 +39,15 @@ async function initializeStore() {
 }
 
 function defaultProfile(username) {
-  return { username, avatar:'avatar_blue', coins:0, level:1, completedLevels:[], score:0, distance:0, achievements:[], inventory:{ owned:['avatar_blue'], lives:3, bullets:0 }, history:[], updatedAt:new Date().toISOString() };
+  return { username, avatar:'avatar_blue', background:null, coins:0, level:1, completedLevels:[], score:0, distance:0, achievements:[], inventory:{ owned:['avatar_blue'], lives:0, bullets:0 }, checkpoint:{ level:0,x:60,y:414,lives:5,coins:0,score:0,bullets:0,keys:0,wordProgress:'',shieldTime:0,magnetTime:0,collected:{} }, history:[], updatedAt:new Date().toISOString() };
+}
+function normalizeProfile(profile, username) {
+  const defaults=defaultProfile(username),p={...defaults,...(profile||{})};
+  p.inventory={...defaults.inventory,...(profile?.inventory||{})};
+  p.inventory.owned=Array.isArray(p.inventory.owned)?p.inventory.owned:['avatar_blue'];
+  const cp=profile?.checkpoint||{};
+  p.checkpoint={...defaults.checkpoint,...cp,level:Math.max(0,Math.min(99,Number(cp.level ?? Math.max(0,(p.level||1)-1))||0)),lives:Math.max(0,Math.min(5,Number(cp.lives??5)||0)),collected:cp.collected&&typeof cp.collected==='object'?cp.collected:{}};
+  return p;
 }
 function saveFileStore() {
   if (pool) return Promise.resolve();
@@ -47,7 +55,7 @@ function saveFileStore() {
   fileWrite = fileWrite.then(async()=>{ await fs.promises.mkdir(DATA_DIR,{recursive:true}); const temp=DATA_FILE+'.tmp'; await fs.promises.writeFile(temp,snapshot); await fs.promises.rename(temp,DATA_FILE); });
   return fileWrite;
 }
-function safeUser(user) { return { id:user.id, username:user.username, profile:user.profile }; }
+function safeUser(user) { return { id:user.id, username:user.username, profile:normalizeProfile(user.profile,user.username) }; }
 async function findUserByName(username) {
   if (pool) { const r=await pool.query('SELECT id,username,password_hash,profile FROM players WHERE lower(username)=lower($1)',[username]); return r.rows[0]||null; }
   return fileStore.users.find(u=>u.username.toLowerCase()===username.toLowerCase())||null;
@@ -79,10 +87,10 @@ async function createUser(username,password) {
 async function updateProfile(id, mutate) {
   if(pool) {
     const cx=await pool.connect();
-    try { await cx.query('BEGIN'); const q=await cx.query('SELECT profile FROM players WHERE id=$1 FOR UPDATE',[id]); if(!q.rows[0])throw new Error('Cuenta no encontrada'); const p=q.rows[0].profile; mutate(p); p.updatedAt=new Date().toISOString(); await cx.query('UPDATE players SET profile=$2 WHERE id=$1',[id,p]); await cx.query('COMMIT'); return p; }
+    try { await cx.query('BEGIN'); const q=await cx.query('SELECT username,profile FROM players WHERE id=$1 FOR UPDATE',[id]); if(!q.rows[0])throw new Error('Cuenta no encontrada'); const p=normalizeProfile(q.rows[0].profile,q.rows[0].username); mutate(p); p.updatedAt=new Date().toISOString(); await cx.query('UPDATE players SET profile=$2 WHERE id=$1',[id,p]); await cx.query('COMMIT'); return p; }
     catch(e){await cx.query('ROLLBACK');throw e;} finally{cx.release();}
   }
-  const u=fileStore.users.find(x=>x.id===id); if(!u)throw new Error('Cuenta no encontrada'); mutate(u.profile); u.profile.updatedAt=new Date().toISOString(); await saveFileStore(); return u.profile;
+  const u=fileStore.users.find(x=>x.id===id); if(!u)throw new Error('Cuenta no encontrada'); u.profile=normalizeProfile(u.profile,u.username); mutate(u.profile); u.profile.updatedAt=new Date().toISOString(); await saveFileStore(); return u.profile;
 }
 function sendJson(res,status,data) { res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}); res.end(JSON.stringify(data)); }
 function readBody(req,limit=32768) { return new Promise((resolve,reject)=>{let body='';req.on('data',c=>{body+=c;if(body.length>limit){reject(Object.assign(new Error('Solicitud demasiado grande'),{status:413}));req.destroy();}});req.on('end',()=>{try{resolve(body?JSON.parse(body):{});}catch{reject(Object.assign(new Error('JSON inválido'),{status:400}));}});req.on('error',reject);}); }
@@ -95,7 +103,7 @@ async function serveApi(req,res,url) {
     if(req.method==='GET'&&p==='/api/catalog') return sendJson(res,200,{items:CATALOG,words:WORDS});
     if(req.method==='POST'&&p==='/api/register') {
       const b=await readBody(req),username=String(b.username||'').trim().slice(0,20),password=String(b.password||'');
-      if(!/^[\p{L}\p{N}_-]{3,20}$/u.test(username)||password.length<8||password.length>100) return sendJson(res,400,{error:'Usa un nombre de 3 a 20 caracteres y una contraseña de 8 o más.'});
+      if(!/^[\p{L}\p{N}_-]{3,20}$/u.test(username)||password.length<4||password.length>100) return sendJson(res,400,{error:'Usa un nombre de 3 a 20 caracteres y una contraseña de 4 o más.'});
       if(await findUserByName(username))return sendJson(res,409,{error:'Ese nombre ya está registrado.'});
       const result=await createUser(username,password);return sendJson(res,201,result);
     }
@@ -107,13 +115,28 @@ async function serveApi(req,res,url) {
     if(p.startsWith('/api/')) {
       const user=await authenticated(req);if(!user)return sendJson(res,401,{error:'Inicia sesión para continuar.'});
       if(req.method==='GET'&&p==='/api/me') return sendJson(res,200,{user:safeUser(user)});
+      if(req.method==='POST'&&p==='/api/checkpoint') {
+        const b=await readBody(req,262144),raw=b.checkpoint||{};
+        const level=Math.max(0,Math.min(99,Math.floor(Number(raw.level)||0)));
+        const x=Math.max(0,Math.min(1e7,Number(raw.x)||0)),y=Math.max(-500,Math.min(2000,Number(raw.y)||414));
+        const lives=Math.max(0,Math.min(5,Math.floor(Number(raw.lives)||0))),bullets=Math.max(0,Math.min(9999,Math.floor(Number(raw.bullets)||0))),keys=Math.max(0,Math.min(999,Math.floor(Number(raw.keys)||0)));
+        const coins=Math.max(0,Math.min(1e9,Math.floor(Number(raw.coins)||0))),score=Math.max(0,Math.min(1e9,Math.floor(Number(raw.score)||0)));
+        const words=String(raw.wordProgress||'').slice(0,32),shieldTime=Math.max(0,Math.min(10,Number(raw.shieldTime)||0)),magnetTime=Math.max(0,Math.min(10,Number(raw.magnetTime)||0)),incoming=raw.collected&&typeof raw.collected==='object'?raw.collected:{};
+        const profile=await updateProfile(user.id,p=>{
+          const merged={...(p.checkpoint?.collected||{})};
+          for(const [key,items] of Object.entries(incoming).slice(-100)){const n=Math.max(0,Math.min(99,Number(key)||0));if(!Array.isArray(items))continue;const old=new Set(Array.isArray(merged[n])?merged[n]:[]);for(const id of items.slice(0,2000)){const value=String(id).slice(0,100);if(/^l\d+:[\w-]+:\d+$/.test(value))old.add(value);}merged[n]=[...old].slice(-3000);}
+          p.checkpoint={level,x,y,lives,coins,score,bullets,keys,wordProgress:words,shieldTime,magnetTime,collected:merged,updatedAt:new Date().toISOString()};
+          p.level=Math.max(p.level||1,level+1);p.score=Math.max(p.score||0,score);
+        });
+        return sendJson(res,200,{profile});
+      }
       if(req.method==='POST'&&p==='/api/profile') {
         const b=await readBody(req);const profile=await updateProfile(user.id,p=>{ if(b.distance)p.distance=Math.max(p.distance,Math.min(1e9,Number(b.distance)||0));if(b.score)p.score=Math.max(p.score,Math.min(1e9,Number(b.score)||0));if(b.level)p.level=Math.max(p.level,Math.min(100,Number(b.level)||1));if(b.completedLevel){const n=Math.max(1,Math.min(100,Number(b.completedLevel)));if(!p.completedLevels.includes(n))p.completedLevels.push(n);}if(b.rewardId&&b.rewardAmount){p.history.push({type:'reward',id:String(b.rewardId).slice(0,80),amount:Math.min(1000,Number(b.rewardAmount)||0),at:new Date().toISOString()});p.coins+=Math.min(1000,Number(b.rewardAmount)||0);} });return sendJson(res,200,{profile});
       }
       if(req.method==='POST'&&p==='/api/reward') {
         const b=await readBody(req),rewardId=String(b.rewardId||'').slice(0,100),amount=Math.max(1,Math.min(100,Number(b.amount)||0));
         if(!/^[\w:-]{1,100}$/.test(rewardId))return sendJson(res,400,{error:'Identificador de recompensa inválido.'});
-        const profile=await updateProfile(user.id,p=>{if(p.history.some(h=>h.type==='reward'&&h.id===rewardId))return;const recent=p.history.filter(h=>h.type==='reward'&&Date.now()-Date.parse(h.at)<3600000).reduce((n,h)=>n+(h.amount||0),0);if(recent+amount>200)throw new Error('Llegaste al límite de monedas por hora.');p.coins+=amount;p.history.unshift({type:'reward',id:rewardId,amount,at:new Date().toISOString()});});return sendJson(res,200,{profile});
+        const profile=await updateProfile(user.id,p=>{if(p.history.some(h=>h.type==='reward'&&h.id===rewardId))return;const recent=p.history.filter(h=>h.type==='reward'&&Date.now()-Date.parse(h.at)<3600000).reduce((n,h)=>n+(h.amount||0),0);if(recent+amount>1000)throw new Error('Llegaste al límite de monedas por hora.');p.coins+=amount;p.history.unshift({type:'reward',id:rewardId,amount,at:new Date().toISOString()});});return sendJson(res,200,{profile});
       }
       if(req.method==='POST'&&p==='/api/purchase') {
         const b=await readBody(req),item=CATALOG[String(b.itemId||'')];if(!item)return sendJson(res,404,{error:'Artículo no encontrado.'});
@@ -149,13 +172,13 @@ function handleWsMessage(client,message) {
   if(!message||typeof message.type!=='string')return;
   if(message.type==='join') {
     if(client.room||!client.user)return;const code=String(message.code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');const room=rooms.get(code);if(!room)return sendWs(client,{type:'error',error:'La sala no existe o ya se cerró.'});if(room.clients.size>=2)return sendWs(client,{type:'error',error:'La sala ya tiene dos jugadores.'});
-    client.room=room;room.clients.add(client);sendWs(client,{type:'joined',code,host:room.host===client.user.id,players:[...room.clients].map(c=>({id:c.user.id,username:c.user.username,avatar:c.user.profile.avatar}))});roomBroadcast(room,{type:'peer-joined',player:{id:client.user.id,username:client.user.username,avatar:client.user.profile.avatar}},client);return;
+    client.room=room;room.clients.add(client);sendWs(client,{type:'joined',code,host:room.host===client.user.id,players:[...room.clients].map(c=>({id:c.user.id,username:c.user.username,avatar:c.user.profile.avatar}))});sendWs(client,{type:'level',level:room.level});const hostClient=[...room.clients].find(c=>c.user.id===room.host);if(hostClient?.state)sendWs(client,{type:'state',playerId:hostClient.user.id,state:{...hostClient.state,avatar:hostClient.user.profile.avatar,username:hostClient.user.username}});roomBroadcast(room,{type:'peer-joined',player:{id:client.user.id,username:client.user.username,avatar:client.user.profile.avatar}},client);return;
   }
   if(message.type==='create-room') {
-    if(!client.user||client.room)return sendWs(client,{type:'error',error:'Inicia sesión para crear una sala.'});let code;do{code=crypto.randomBytes(4).toString('hex').toUpperCase();}while(rooms.has(code));const room={code,host:client.user.id,clients:new Set([client]),level:0,started:false,events:new Map()};rooms.set(code,room);client.room=room;return sendWs(client,{type:'room-created',code,host:true,invite:'/index.html?room='+code});
+    if(!client.user||client.room)return sendWs(client,{type:'error',error:'Inicia sesión para crear una sala.'});let code;do{code=crypto.randomBytes(4).toString('hex').toUpperCase();}while(rooms.has(code));const room={code,host:client.user.id,clients:new Set([client]),level:Math.max(0,Math.min(99,Number(message.level)||0)),started:false,events:new Map()};rooms.set(code,room);client.room=room;return sendWs(client,{type:'room-created',code,host:true,invite:'/index.html?room='+code});
   }
   const room=client.room;if(!room)return;
-  if(message.type==='state') {const s=message.state||{};if(!Number.isFinite(s.x)||!Number.isFinite(s.y))return;client.state={x:s.x,y:s.y,level:s.level,lives:s.lives};roomBroadcast(room,{type:'state',playerId:client.user.id,state:{x:Math.max(0,Math.min(100000,s.x)),y:Math.max(-500,Math.min(2000,s.y)),facing:s.facing<0?-1:1,level:Math.max(0,Math.min(99,Number(s.level)||0)),lives:Math.max(0,Math.min(5,Number(s.lives)||0)),avatar:String(s.avatar||client.user.profile.avatar||'avatar_blue').slice(0,32),username:client.user.username}},client);return;}
+  if(message.type==='state') {const s=message.state||{};if(!Number.isFinite(s.x)||!Number.isFinite(s.y))return;client.state={x:s.x,y:s.y,level:s.level,lives:s.lives};if(room.host===client.user.id)room.level=Math.max(0,Math.min(99,Number(s.level)||0));roomBroadcast(room,{type:'state',playerId:client.user.id,state:{x:Math.max(0,Math.min(100000,s.x)),y:Math.max(-500,Math.min(2000,s.y)),facing:s.facing<0?-1:1,level:Math.max(0,Math.min(99,Number(s.level)||0)),lives:Math.max(0,Math.min(5,Number(s.lives)||0)),avatar:String(s.avatar||client.user.profile.avatar||'avatar_blue').slice(0,32),username:client.user.username}},client);return;}
   if(message.type==='game-event') {const ev=message.event||{},id=String(ev.id||'').slice(0,100);if(!id)return;if(room.events.has(id))return sendWs(client,{type:'game-event-rejected',eventId:id,event:room.events.get(id)});const accepted={...ev,id};room.events.set(id,accepted);if(room.events.size>4000)room.events.clear();roomBroadcast(room,{type:'game-event',playerId:client.user.id,event:accepted});return;}
   if(message.type==='level') {if(room.host!==client.user.id)return;const level=Math.max(0,Math.min(99,Number(message.level)||0));room.level=level;roomBroadcast(room,{type:'level',level},client);return;}
   if(message.type==='signal'&&['offer','answer','candidate'].includes(message.signalType)) {const data=JSON.stringify(message.data||{});if(data.length<200000)roomBroadcast(room,{type:'signal',signalType:message.signalType,data:message.data},client);return;}
@@ -184,4 +207,5 @@ server.on('upgrade',(req,socket)=>{upgradeWs(req,socket).catch(error=>{console.e
 const preferredPort=process.env.PORT?Number(process.env.PORT):3006,lastPort=process.env.PORT?preferredPort:3100;
 function listen(port){server.once('error',error=>{if(error.code==='EADDRINUSE'&&port<lastPort)return listen(port+1);console.error(error.message);process.exitCode=1;});server.listen(port,'0.0.0.0',()=>{console.log('Salto Estelar disponible en http://localhost:'+port);console.log('Para otro dispositivo en la red, usa la IP de este computador y el puerto '+port+'.');});}
 initializeStore().then(()=>listen(preferredPort)).catch(error=>{console.error('No se pudo iniciar la base de datos:',error);process.exit(1);});
+
 
